@@ -82,7 +82,7 @@ When the analytics destination bucket is in a **different account** from the sou
 | `analytics_self_source_destination` | `bool` | Set to `true` when the source and destination bucket are the same |
 
 <Note>
-Always set `attach_policy = true` together with `attach_analytics_destination_policy = true` so the policy is actually applied to the bucket.
+Unlike `attach_inventory_destination_policy`, the `attach_analytics_destination_policy` flag is not included in the module's internal `attach_policy` local. You must also set `attach_inventory_destination_policy = true` or another `attach_*` policy flag to trigger the bucket policy resource creation, or set `attach_policy = true` with a custom `policy` as the combined trigger.
 </Note>
 
 ## Examples

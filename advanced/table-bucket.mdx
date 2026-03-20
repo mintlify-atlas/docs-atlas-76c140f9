@@ -114,8 +114,9 @@ The submodule manages the following AWS resources:
 
       tables = {
         events = {
-          format    = "ICEBERG"
-          namespace = "analytics"
+          table_name = "events"
+          format     = "ICEBERG"
+          namespace  = "analytics"
 
           metadata = {
             iceberg = {
@@ -132,8 +133,9 @@ The submodule manages the following AWS resources:
         }
 
         users = {
-          format    = "ICEBERG"
-          namespace = "analytics"
+          table_name = "users"
+          format     = "ICEBERG"
+          namespace  = "analytics"
 
           metadata = {
             iceberg = {

@@ -109,12 +109,14 @@ module "table_bucket" {
     ```hcl
     tables = {
       orders = {
-        name   = "orders"
-        format = "ICEBERG"
+        table_name = "orders"
+        namespace  = "analytics"
+        format     = "ICEBERG"
       }
       events = {
-        name   = "events"
-        format = "ICEBERG"
+        table_name = "events"
+        namespace  = "analytics"
+        format     = "ICEBERG"
       }
     }
     ```
@@ -234,12 +236,14 @@ module "table_bucket" {
 
   tables = {
     orders = {
-      name   = "orders"
-      format = "ICEBERG"
+      table_name = "orders"
+      namespace  = "analytics"
+      format     = "ICEBERG"
     }
     events = {
-      name   = "events"
-      format = "ICEBERG"
+      table_name = "events"
+      namespace  = "analytics"
+      format     = "ICEBERG"
     }
   }
 
