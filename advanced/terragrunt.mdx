@@ -1,0 +1,145 @@
+---
+title: Terragrunt Compatibility
+description: How to use the terraform-aws-s3-bucket module with Terragrunt, including how to handle type = any variables using jsonencode().
+---
+
+## Overview
+
+There is a known bug [#1211](https://github.com/gruntwork-io/terragrunt/issues/1211) in Terragrunt related to the way variables of `type = any` are passed to Terraform. When Terragrunt serialises inputs, complex values assigned to `type = any` variables can be mis-typed, causing Terraform to reject them.
+
+This module explicitly handles this issue. Every `type = any` variable is decoded with a `try(jsondecode(...), ...)` pattern inside `main.tf`, so you can safely pass a `jsonencode()`-wrapped string from your `terragrunt.hcl` instead of a native HCL value.
+
+```hcl
+# main.tf (excerpt)
+locals {
+  # Variables with type `any` should be jsonencode()'d when value is coming from Terragrunt
+  grants               = try(jsondecode(var.grant), var.grant)
+  cors_rules           = try(jsondecode(var.cors_rule), var.cors_rule)
+  lifecycle_rules      = try(jsondecode(var.lifecycle_rule), var.lifecycle_rule)
+  intelligent_tiering  = try(jsondecode(var.intelligent_tiering), var.intelligent_tiering)
+  metric_configuration = try(jsondecode(var.metric_configuration), var.metric_configuration)
+}
+```
+
+## Variables that require `jsonencode()`
+
+The following variables are declared with `type = any` (or `type = map(string)` but treated as complex objects). When setting them from a `terragrunt.hcl` `inputs` block you **must** wrap the value in `jsonencode()`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `cors_rule` | `[]` | List of CORS rule maps |
+| `lifecycle_rule` | `[]` | List of lifecycle rule maps |
+| `versioning` | `{}` | Versioning configuration map |
+| `logging` | `{}` | Access logging configuration map |
+| `server_side_encryption_configuration` | `{}` | SSE configuration map |
+| `intelligent_tiering` | `{}` | Intelligent-Tiering configuration map |
+| `metric_configuration` | `[]` | Bucket metric configuration |
+| `replication_configuration` | `{}` | Cross-Region Replication map |
+| `website` | `{}` | Static website hosting map |
+| `grant` | `[]` | ACL policy grant list |
+| `object_lock_configuration` | `{}` | Object Lock configuration map |
+
+<Note>
+Simple `string`, `bool`, and `number` variables such as `bucket`, `acl`, and `force_destroy` do **not** need `jsonencode()`. Only the complex `type = any` variables listed above require it.
+</Note>
+
+## Basic `terragrunt.hcl` inputs pattern
+
+```terraform
+# terragrunt.hcl
+tf_source = "tfr:///terraform-aws-modules/s3-bucket/aws"
+
+inputs = {
+  bucket    = "foobar"            # `bucket` has type `string`, no need to jsonencode()
+  cors_rule = jsonencode([...])   # `cors_rule` has type `any`, so `jsonencode()` is required
+}
+```
+
+## Complete example with versioning and lifecycle rules
+
+The following `terragrunt.hcl` demonstrates a bucket with versioning enabled and a lifecycle rule that moves non-current versions to Glacier after 90 days.
+
+```terraform
+# terragrunt.hcl
+terraform {
+  source = "tfr:///terraform-aws-modules/s3-bucket/aws"
+}
+
+inputs = {
+  bucket        = "my-terragrunt-bucket"
+  force_destroy = true
+
+  # Simple scalars — no jsonencode() needed
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  # type = map(string) — jsonencode() required from Terragrunt
+  versioning = jsonencode({
+    enabled = true
+  })
+
+  # type = any — jsonencode() required from Terragrunt
+  lifecycle_rule = jsonencode([
+    {
+      id      = "expire-noncurrent"
+      enabled = true
+
+      noncurrent_version_transition = [
+        {
+          days          = 30
+          storage_class = "STANDARD_IA"
+        },
+        {
+          days          = 90
+          storage_class = "GLACIER"
+        }
+      ]
+
+      noncurrent_version_expiration = {
+        days = 300
+      }
+    }
+  ])
+
+  # type = any — jsonencode() required from Terragrunt
+  server_side_encryption_configuration = jsonencode({
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  })
+
+  tags = {
+    Environment = "production"
+    ManagedBy   = "Terragrunt"
+  }
+}
+```
+
+<Steps>
+  <Step title="Identify type = any variables">
+    Review the table above and identify which inputs you are setting that are declared as `type = any`.
+  </Step>
+  <Step title="Wrap complex values with jsonencode()">
+    In your `terragrunt.hcl` `inputs` block, wrap every `type = any` value with `jsonencode()`.
+
+    ```terraform
+    versioning = jsonencode({ enabled = true })
+    ```
+  </Step>
+  <Step title="Leave scalars unwrapped">
+    Variables with concrete types (`string`, `bool`, `number`, `list(string)`, etc.) should be passed as normal HCL values — no `jsonencode()` required.
+
+    ```terraform
+    bucket        = "my-bucket"
+    force_destroy = true
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+If you are unsure whether a variable needs `jsonencode()`, check `variables.tf`. Any variable declared with `type = any` must be wrapped when used from Terragrunt.
+</Tip>

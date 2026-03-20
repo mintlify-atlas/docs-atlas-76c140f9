@@ -1,0 +1,182 @@
+---
+title: Notification Submodule
+description: Reference for the S3 bucket notification submodule, which configures Lambda, SQS, and SNS notifications for an S3 bucket.
+---
+
+The `notification` submodule manages S3 bucket notification configurations. It supports sending event notifications to Lambda functions, SQS queues, and SNS topics, and can also enable Amazon EventBridge notifications.
+
+## Module Reference
+
+```hcl
+module "notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket = module.s3_bucket.s3_bucket_id
+
+  # ... see variables below
+}
+```
+
+---
+
+## Input Variables
+
+<ParamField path="create" type="bool" default="true">
+  Whether to create this resource or not. Set to `false` to conditionally skip notification configuration.
+</ParamField>
+
+<ParamField path="region" type="string" default="null">
+  Region where the resource(s) will be managed. Defaults to the region set in the provider configuration.
+</ParamField>
+
+<ParamField path="bucket" type="string" default='""'>
+  Name of the S3 bucket to configure notifications for.
+</ParamField>
+
+<ParamField path="bucket_arn" type="string" default="null">
+  ARN of the S3 bucket. Used in IAM policies that grant notification targets permission to receive messages.
+</ParamField>
+
+<ParamField path="eventbridge" type="bool" default="null">
+  Whether to enable Amazon EventBridge notifications. When enabled, all events are sent to EventBridge in addition to any configured targets.
+</ParamField>
+
+<ParamField path="create_sns_policy" type="bool" default="true">
+  Whether to create an IAM policy that grants S3 permission to publish to the configured SNS topic(s).
+</ParamField>
+
+<ParamField path="create_sqs_policy" type="bool" default="true">
+  Whether to create an IAM policy that grants S3 permission to send messages to the configured SQS queue(s).
+</ParamField>
+
+<ParamField path="create_lambda_permission" type="bool" default="true">
+  Whether to create Lambda resource-based policy permissions that allow S3 to invoke the configured Lambda function(s).
+</ParamField>
+
+<ParamField path="lambda_notifications" type="any" default="{}">
+  Map of S3 bucket notifications to Lambda functions. Each key is a logical name for the notification; each value is a map of notification configuration attributes.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    lambda_notifications = {
+      lambda1 = {
+        function_arn  = aws_lambda_function.this.arn
+        function_name = aws_lambda_function.this.function_name
+        events        = ["s3:ObjectCreated:*"]
+        filter_prefix = "uploads/"
+        filter_suffix = ".jpg"
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="sqs_notifications" type="any" default="{}">
+  Map of S3 bucket notifications to SQS queues. Each key is a logical name for the notification; each value is a map of notification configuration attributes.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    sqs_notifications = {
+      sqs1 = {
+        queue_arn     = aws_sqs_queue.this.arn
+        events        = ["s3:ObjectCreated:*"]
+        filter_prefix = "logs/"
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="sns_notifications" type="any" default="{}">
+  Map of S3 bucket notifications to SNS topics. Each key is a logical name for the notification; each value is a map of notification configuration attributes.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    sns_notifications = {
+      sns1 = {
+        topic_arn = aws_sns_topic.this.arn
+        events    = ["s3:ObjectRemoved:*"]
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+---
+
+## Outputs
+
+<ResponseField name="s3_bucket_notification_id" type="string">
+  The ID of the S3 bucket for which the notification configuration was applied.
+</ResponseField>
+
+---
+
+## Complete Example
+
+This example configures S3 bucket notifications that deliver events to a Lambda function, an SQS queue, and an SNS topic simultaneously.
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket        = "my-app-bucket"
+  force_destroy = true
+}
+
+resource "aws_lambda_function" "this" {
+  function_name = "process-s3-event"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+
+  filename = "function.zip"
+}
+
+resource "aws_sqs_queue" "this" {
+  name = "s3-event-queue"
+}
+
+resource "aws_sns_topic" "this" {
+  name = "s3-event-topic"
+}
+
+module "notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  # Enable EventBridge for all events
+  eventbridge = true
+
+  # Lambda notifications for image uploads
+  lambda_notifications = {
+    process_images = {
+      function_arn  = aws_lambda_function.this.arn
+      function_name = aws_lambda_function.this.function_name
+      events        = ["s3:ObjectCreated:*"]
+      filter_prefix = "uploads/"
+      filter_suffix = ".jpg"
+    }
+  }
+
+  # SQS notifications for log files
+  sqs_notifications = {
+    log_queue = {
+      queue_arn     = aws_sqs_queue.this.arn
+      events        = ["s3:ObjectCreated:*"]
+      filter_prefix = "logs/"
+      filter_suffix = ".log"
+    }
+  }
+
+  # SNS notifications for object deletions
+  sns_notifications = {
+    deletion_alert = {
+      topic_arn = aws_sns_topic.this.arn
+      events    = ["s3:ObjectRemoved:*"]
+    }
+  }
+}
+```

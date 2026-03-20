@@ -1,0 +1,150 @@
+---
+title: Examples
+description: Explore ready-to-use Terraform examples covering common S3 bucket configurations, from basic setups to advanced features like replication, notifications, and analytics.
+---
+
+The `terraform-aws-s3-bucket` module repository includes a set of fully-working example configurations. Each example can be deployed as-is or used as a starting point for your own configuration.
+
+<CardGroup cols={2}>
+  <Card
+    title="Complete"
+    icon="circle-check"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/complete"
+  >
+    A comprehensive example with most supported features enabled — versioning, encryption, lifecycle rules, CORS, website hosting, logging, and more.
+  </Card>
+  <Card
+    title="Cross-Region Replication"
+    icon="arrows-rotate"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-replication"
+  >
+    Demonstrates setting up Cross-Region Replication (CRR) between two S3 buckets in different AWS regions, including the required IAM role.
+  </Card>
+  <Card
+    title="S3 Notifications"
+    icon="bell"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/notification"
+  >
+    Configures S3 event notifications to Lambda functions, SQS queues, and SNS topics using the `notification` submodule.
+  </Card>
+  <Card
+    title="S3 Object"
+    icon="file"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/object"
+  >
+    Demonstrates managing S3 bucket objects (files) using the `object` submodule, including content uploads, metadata, and encryption.
+  </Card>
+  <Card
+    title="S3 Analytics"
+    icon="chart-bar"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-analytics"
+  >
+    Shows how to configure S3 Analytics to analyze storage access patterns and identify data that should be transitioned to a different storage class.
+  </Card>
+  <Card
+    title="S3 Inventory"
+    icon="list"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-inventory"
+  >
+    Configures S3 Inventory to generate regular reports of objects in your bucket, including metadata and encryption status.
+  </Card>
+  <Card
+    title="Account-Level Public Access Block"
+    icon="shield"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/account-public-access"
+  >
+    Demonstrates managing S3 account-level Public Access Block settings using the `account-public-access` submodule.
+  </Card>
+  <Card
+    title="S3 Directory Bucket"
+    icon="folder-open"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/directory-bucket"
+  >
+    Creates an S3 Directory Bucket — a high-performance bucket type optimized for latency-sensitive use cases in a single Availability Zone.
+  </Card>
+  <Card
+    title="S3 Table Bucket"
+    icon="table"
+    href="https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/table-bucket"
+  >
+    Creates an S3 Table Bucket for storing Apache Iceberg tables, with encryption, maintenance configuration, and table creation.
+  </Card>
+</CardGroup>
+
+---
+
+## Running an Example
+
+To run any of the examples locally:
+
+```bash
+# Clone the repository
+git clone https://github.com/terraform-aws-modules/terraform-aws-s3-bucket.git
+cd terraform-aws-s3-bucket/examples/complete
+
+# Initialize and apply
+terraform init
+terraform plan
+terraform apply
+```
+
+<Note>
+  Each example directory contains its own `main.tf`, `variables.tf`, and `outputs.tf`. Review the `README.md` within each example directory for specific instructions and prerequisites.
+</Note>
+
+---
+
+## Quick Start Snippets
+
+### Private bucket with versioning
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+  acl    = "private"
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  versioning = {
+    enabled = true
+  }
+}
+```
+
+### Bucket for ELB access logs
+
+```hcl
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-logs"
+  acl    = "log-delivery-write"
+
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_elb_log_delivery_policy = true
+}
+```
+
+### Bucket for WAF logs
+
+```hcl
+module "s3_bucket_for_waf_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-waf-logs"
+
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_waf_log_delivery_policy = true
+}
+```

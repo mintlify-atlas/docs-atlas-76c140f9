@@ -1,0 +1,134 @@
+---
+title: TLS Enforcement
+description: Require HTTPS and enforce a minimum TLS version for all S3 API calls using IAM bucket policies.
+---
+
+Data in transit to and from S3 should always be encrypted using HTTPS. The module provides two IAM bucket policies that enforce secure transport:
+
+1. **Deny insecure transport** — rejects any S3 API call made over plain HTTP
+2. **Require latest TLS** — rejects connections using TLS versions older than 1.2
+
+Both policies apply to all principals (`"*"`) making requests against the bucket, including IAM users, roles, and AWS services.
+
+## Deny insecure transport
+
+Setting `attach_deny_insecure_transport_policy = true` attaches a bucket policy that denies all `s3:*` actions when the request is not made over SSL.
+
+The policy condition checks `aws:SecureTransport = false` and denies the request:
+
+```hcl
+data "aws_iam_policy_document" "deny_insecure_transport" {
+  statement {
+    sid    = "denyInsecureTransport"
+    effect = "Deny"
+
+    actions = [
+      "s3:*",
+    ]
+
+    resources = [
+      aws_s3_bucket.this[0].arn,
+      "${aws_s3_bucket.this[0].arn}/*",
+    ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values = [
+        "false"
+      ]
+    }
+  }
+}
+```
+
+This policy covers both the bucket itself and all objects within it.
+
+## Require latest TLS
+
+Setting `attach_require_latest_tls_policy = true` attaches a bucket policy that denies `s3:*` actions when the TLS version used by the client is less than 1.2.
+
+The policy condition checks `s3:TlsVersion < 1.2` and denies the request:
+
+```hcl
+data "aws_iam_policy_document" "require_latest_tls" {
+  statement {
+    sid    = "denyOutdatedTLS"
+    effect = "Deny"
+
+    actions = [
+      "s3:*",
+    ]
+
+    resources = [
+      aws_s3_bucket.this[0].arn,
+      "${aws_s3_bucket.this[0].arn}/*",
+    ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "NumericLessThan"
+      variable = "s3:TlsVersion"
+      values = [
+        "1.2"
+      ]
+    }
+  }
+}
+```
+
+<Tip>
+  Use both `attach_deny_insecure_transport_policy` and `attach_require_latest_tls_policy` together for complete in-transit security. The insecure transport policy blocks plain HTTP entirely, while the TLS version policy ensures that even HTTPS clients are running a modern protocol version. The module merges both into a single bucket policy document automatically.
+</Tip>
+
+## Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `attach_deny_insecure_transport_policy` | `false` | When `true`, attaches a bucket policy that denies all `s3:*` actions when `aws:SecureTransport` is `false`. |
+| `attach_require_latest_tls_policy` | `false` | When `true`, attaches a bucket policy that denies all `s3:*` actions when `s3:TlsVersion` is less than `1.2`. |
+
+## Complete example
+
+The following example creates a private bucket with both TLS enforcement policies enabled:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-secure-bucket"
+
+  # Enforce HTTPS-only access
+  attach_deny_insecure_transport_policy = true
+
+  # Require TLS 1.2 or higher
+  attach_require_latest_tls_policy = true
+}
+```
+
+## How policies are applied
+
+<Steps>
+  <Step title="Policy documents are generated">
+    When either `attach_deny_insecure_transport_policy` or `attach_require_latest_tls_policy` is `true`, Terraform generates the corresponding `aws_iam_policy_document` data sources.
+  </Step>
+  <Step title="Policies are merged into a combined document">
+    Both policy documents are included in `data.aws_iam_policy_document.combined`, which merges all active bucket policies (TLS, log delivery, encryption, custom, etc.) into a single JSON document.
+  </Step>
+  <Step title="Policy is attached after the public access block">
+    The `aws_s3_bucket_policy` resource depends on `aws_s3_bucket_public_access_block` to avoid race conditions that can occur when attaching a bucket policy at the same time as updating public access block settings.
+  </Step>
+</Steps>
+
+<Note>
+  These policies are IAM resource-based bucket policies. They apply to **all** requestors regardless of their identity — including AWS service principals, IAM roles, and cross-account principals — whenever they interact with the bucket via the S3 API.
+</Note>

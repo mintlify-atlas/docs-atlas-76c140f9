@@ -1,122 +1,107 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "terraform-aws-s3-bucket",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#594ed8",
+    "light": "#acacf4",
+    "dark": "#040404"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/e17d026d-572d-467c-9d7d-22530830489c.png",
+  "logo": {
+    "light": "https://media.brand.dev/448fe42e-e2e3-494e-ae00-baff79ebb002.png",
+    "dark": "https://media.brand.dev/e17d026d-572d-467c-9d7d-22530830489c.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/terraform-aws-modules/terraform-aws-s3-bucket"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/terraform-aws-modules/terraform-aws-s3-bucket"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Guides",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "guides/versioning",
+              "guides/encryption",
+              "guides/replication",
+              "guides/lifecycle",
+              "guides/access-logging",
+              "guides/static-website",
+              "guides/bucket-policies",
+              "guides/directory-bucket",
+              "guides/object-management",
+              "guides/notifications"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Security",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "security/public-access-block",
+              "security/tls-enforcement",
+              "security/encryption-enforcement"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Advanced",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "advanced/terragrunt",
+              "advanced/wrappers",
+              "advanced/table-bucket",
+              "advanced/analytics",
+              "advanced/inventory"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Module Inputs",
             "pages": [
-              "api-reference/introduction"
+              "reference/inputs"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Module Outputs",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "reference/outputs"
+            ]
+          },
+          {
+            "group": "Submodules",
+            "pages": [
+              "reference/submodule-notification",
+              "reference/submodule-object",
+              "reference/submodule-table-bucket",
+              "reference/submodule-account-public-access"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "reference/examples"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

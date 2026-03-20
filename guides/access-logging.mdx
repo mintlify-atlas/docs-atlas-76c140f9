@@ -1,0 +1,161 @@
+---
+title: Access Logging
+description: Capture S3 server access logs and route AWS service logs (ELB, ALB/NLB, CloudTrail, WAF) to an S3 bucket.
+---
+
+S3 server access logging records every request made against a bucket. The log entries include the requester, bucket name, request time, action, response status, and error code. Logs are delivered to a separate destination bucket that you configure.
+
+## S3 server access logging
+
+Use the `logging` variable to enable server access logging on the bucket:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  logging = {
+    target_bucket = module.log_bucket.s3_bucket_id
+    target_prefix = "log/"
+  }
+}
+```
+
+### Partitioned log delivery
+
+Use `target_object_key_format` to partition logs by date for easier Athena querying:
+
+```hcl
+logging = {
+  target_bucket = module.log_bucket.s3_bucket_id
+  target_prefix = "log/"
+  target_object_key_format = {
+    partitioned_prefix = {
+      partition_date_source = "DeliveryTime" # or "EventTime"
+    }
+  }
+}
+```
+
+## Log delivery bucket policies
+
+The destination bucket must grant write access to the relevant service principal. The module provides toggle variables for each AWS service.
+
+<CardGroup cols={2}>
+  <Card title="attach_elb_log_delivery_policy" icon="server">
+    Allows Classic Elastic Load Balancer to write access logs. Grants permission to the ELB service account for older regions and the `logdelivery.elasticloadbalancing.amazonaws.com` principal for newer regions.
+  </Card>
+  <Card title="attach_lb_log_delivery_policy" icon="network-wired">
+    Allows Application Load Balancer (ALB) and Network Load Balancer (NLB) to write logs via the `delivery.logs.amazonaws.com` service principal.
+  </Card>
+  <Card title="attach_cloudtrail_log_delivery_policy" icon="file-lines">
+    Allows CloudTrail to write audit logs via the `cloudtrail.amazonaws.com` service principal.
+  </Card>
+  <Card title="attach_waf_log_delivery_policy" icon="shield-halved">
+    Allows AWS WAF to write web ACL traffic logs via the `delivery.logs.amazonaws.com` service principal.
+  </Card>
+  <Card title="attach_access_log_delivery_policy" icon="list">
+    Allows S3 server access log delivery via the `logging.s3.amazonaws.com` service principal.
+  </Card>
+</CardGroup>
+
+## Classic ELB log bucket
+
+```hcl
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-logs"
+  acl    = "log-delivery-write"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_elb_log_delivery_policy = true
+}
+```
+
+## ALB/NLB log bucket
+
+```hcl
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-logs"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_elb_log_delivery_policy = true  # Required for ALB logs
+  attach_lb_log_delivery_policy  = true  # Required for ALB/NLB logs
+}
+```
+
+## WAF log bucket
+
+```hcl
+module "s3_bucket_for_waf_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-waf-logs"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_waf_log_delivery_policy = true
+}
+```
+
+## Combined log bucket (all services)
+
+You can enable multiple policies on a single destination bucket:
+
+```hcl
+module "log_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket        = "logs-${random_pet.this.id}"
+  force_destroy = true
+
+  control_object_ownership = true
+
+  attach_elb_log_delivery_policy        = true
+  attach_lb_log_delivery_policy         = true
+  attach_access_log_delivery_policy     = true
+  attach_cloudtrail_log_delivery_policy = true
+  attach_waf_log_delivery_policy        = true
+
+  access_log_delivery_policy_source_accounts      = [data.aws_caller_identity.current.account_id]
+  access_log_delivery_policy_source_buckets       = ["arn:aws:s3:::my-source-bucket"]
+  access_log_delivery_policy_source_organizations = ["o-123456"]
+  lb_log_delivery_policy_source_organizations     = ["o-123456"]
+}
+```
+
+## Scoping access log delivery
+
+The `attach_access_log_delivery_policy` supports additional conditions to restrict which source buckets and accounts can deliver logs:
+
+| Variable | Type | Purpose |
+|---|---|---|
+| `access_log_delivery_policy_source_buckets` | `list(string)` | List of source bucket ARNs allowed to deliver logs |
+| `access_log_delivery_policy_source_accounts` | `list(string)` | List of AWS account IDs allowed to deliver logs |
+| `access_log_delivery_policy_source_organizations` | `list(string)` | List of AWS Organization IDs allowed to deliver logs |
+
+### Scoping ALB/NLB log delivery by organization
+
+```hcl
+lb_log_delivery_policy_source_organizations = ["o-abc123"]
+```
+
+This adds a `StringEquals aws:ResourceOrgID` condition to the bucket policy, restricting delivery to load balancers in the specified Organizations.

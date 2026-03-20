@@ -1,0 +1,506 @@
+---
+title: Input Variables
+description: Complete reference for all input variables supported by the terraform-aws-s3-bucket module.
+---
+
+This page documents every input variable accepted by the `terraform-aws-s3-bucket` module. Variables are organized into logical groups to make them easier to navigate.
+
+<Info>
+  The module requires Terraform `>= 1.5.7` and the AWS provider `>= 6.37`.
+</Info>
+
+## Bucket Configuration
+
+<ParamField path="bucket" type="string" default="null">
+  (Optional, Forces new resource) The name of the bucket. If omitted, Terraform will assign a random, unique name.
+</ParamField>
+
+<ParamField path="bucket_prefix" type="string" default="null">
+  (Optional, Forces new resource) Creates a unique bucket name beginning with the specified prefix. Conflicts with `bucket`.
+</ParamField>
+
+<ParamField path="bucket_namespace" type="string" default="null">
+  Namespace for the bucket. Determines bucket naming scope. Valid values: `account-regional`, `global`. Defaults to `global` (AWS).
+</ParamField>
+
+<ParamField path="region" type="string" default="null">
+  Region where the resource(s) will be managed. Defaults to the region set in the provider configuration.
+</ParamField>
+
+<ParamField path="create_bucket" type="bool" default="true">
+  Controls if S3 bucket should be created. Set to `false` to conditionally skip bucket creation.
+</ParamField>
+
+<ParamField path="force_destroy" type="bool" default="false">
+  A boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error. These objects are not recoverable.
+</ParamField>
+
+<ParamField path="tags" type="map(string)" default="{}">
+  A mapping of tags to assign to the bucket.
+</ParamField>
+
+<ParamField path="acl" type="string" default="null">
+  The canned ACL to apply. Conflicts with `grant`.
+</ParamField>
+
+<ParamField path="policy" type="string" default="null">
+  A valid bucket policy JSON document. Note that if the policy document is not specific enough (but still valid), Terraform may view the policy as constantly changing in a `terraform plan`. Use the verbose/specific version of the policy. Supports the placeholders `_S3_BUCKET_ID_`, `_S3_BUCKET_ARN_`, and `_AWS_ACCOUNT_ID_`.
+</ParamField>
+
+<ParamField path="grant" type="any" default="[]">
+  An ACL policy grant. Conflicts with `acl`.
+</ParamField>
+
+<ParamField path="owner" type="map(string)" default="{}">
+  Bucket owner's display name and ID. Conflicts with `acl`.
+</ParamField>
+
+<ParamField path="expected_bucket_owner" type="string" default="null">
+  The account ID of the expected bucket owner.
+</ParamField>
+
+---
+
+## Access Control
+
+<ParamField path="block_public_acls" type="bool" default="true">
+  Whether Amazon S3 should block public ACLs for this bucket.
+</ParamField>
+
+<ParamField path="block_public_policy" type="bool" default="true">
+  Whether Amazon S3 should block public bucket policies for this bucket.
+</ParamField>
+
+<ParamField path="ignore_public_acls" type="bool" default="true">
+  Whether Amazon S3 should ignore public ACLs for this bucket.
+</ParamField>
+
+<ParamField path="restrict_public_buckets" type="bool" default="true">
+  Whether Amazon S3 should restrict public bucket policies for this bucket.
+</ParamField>
+
+<ParamField path="attach_public_policy" type="bool" default="true">
+  Controls if a user defined public bucket policy will be attached. Set to `false` to allow upstream to apply defaults to the bucket.
+</ParamField>
+
+<ParamField path="skip_destroy_public_access_block" type="bool" default="true">
+  Whether to skip destroying the S3 Bucket Public Access Block configuration when destroying the bucket. Only used if `public_access_block` is set to `true`.
+</ParamField>
+
+<ParamField path="control_object_ownership" type="bool" default="false">
+  Whether to manage S3 Bucket Ownership Controls on this bucket.
+</ParamField>
+
+<ParamField path="object_ownership" type="string" default="BucketOwnerEnforced">
+  Object ownership. Valid values:
+  - `BucketOwnerEnforced` — ACLs are disabled, and the bucket owner automatically owns and has full control over every object in the bucket.
+  - `BucketOwnerPreferred` — Objects uploaded to the bucket change ownership to the bucket owner if the objects are uploaded with the `bucket-owner-full-control` canned ACL.
+  - `ObjectWriter` — The uploading account will own the object if the object is uploaded with the `bucket-owner-full-control` canned ACL.
+</ParamField>
+
+---
+
+## Encryption
+
+<ParamField path="server_side_encryption_configuration" type="any" default="{}">
+  Map containing server-side encryption configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    server_side_encryption_configuration = {
+      rule = {
+        apply_server_side_encryption_by_default = {
+          sse_algorithm     = "aws:kms"
+          kms_master_key_id = aws_kms_key.objects.arn
+        }
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="attach_deny_incorrect_encryption_headers" type="bool" default="false">
+  Controls if S3 bucket should deny incorrect encryption headers policy attached.
+</ParamField>
+
+<ParamField path="attach_deny_incorrect_kms_key_sse" type="bool" default="false">
+  Controls if S3 bucket policy should deny usage of incorrect KMS key SSE.
+</ParamField>
+
+<ParamField path="allowed_kms_key_arn" type="string" default="null">
+  The ARN of KMS key which should be allowed in PutObject. Used in conjunction with `attach_deny_incorrect_kms_key_sse`.
+</ParamField>
+
+<ParamField path="attach_deny_unencrypted_object_uploads" type="bool" default="false">
+  Controls if S3 bucket should deny unencrypted object uploads policy attached.
+</ParamField>
+
+<ParamField path="attach_deny_ssec_encrypted_object_uploads" type="bool" default="false">
+  Controls if S3 bucket should deny SSEC (customer-provided key) encrypted object uploads.
+</ParamField>
+
+---
+
+## Versioning & Object Lock
+
+<ParamField path="versioning" type="map(string)" default="{}">
+  Map containing versioning configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    versioning = {
+      enabled    = true
+      mfa_delete = false
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="object_lock_enabled" type="bool" default="false">
+  Whether S3 bucket should have an Object Lock configuration enabled.
+</ParamField>
+
+<ParamField path="object_lock_configuration" type="any" default="{}">
+  Map containing S3 object locking configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    object_lock_configuration = {
+      rule = {
+        default_retention = {
+          mode = "GOVERNANCE"
+          days = 1
+        }
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+---
+
+## Lifecycle
+
+<ParamField path="lifecycle_rule" type="any" default="[]">
+  List of maps containing configuration of object lifecycle management.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    lifecycle_rule = [
+      {
+        id      = "log-expiry"
+        enabled = true
+
+        expiration = {
+          days = 90
+        }
+
+        transition = [
+          {
+            days          = 30
+            storage_class = "STANDARD_IA"
+          },
+          {
+            days          = 60
+            storage_class = "GLACIER"
+          }
+        ]
+      }
+    ]
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="transition_default_minimum_object_size" type="string" default="null">
+  The default minimum object size behavior applied to the lifecycle configuration. Valid values: `all_storage_classes_128K` (default), `varies_by_storage_class`.
+</ParamField>
+
+---
+
+## Replication
+
+<ParamField path="replication_configuration" type="any" default="{}">
+  Map containing cross-region replication configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    replication_configuration = {
+      role = aws_iam_role.replication.arn
+
+      rules = [
+        {
+          id     = "everything-without-filters"
+          status = "Enabled"
+
+          destination = {
+            bucket        = module.replica_bucket.s3_bucket_arn
+            storage_class = "STANDARD"
+          }
+        }
+      ]
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+---
+
+## Logging
+
+<ParamField path="logging" type="any" default="{}">
+  Map containing access bucket logging configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    logging = {
+      target_bucket = module.log_bucket.s3_bucket_id
+      target_prefix = "log/"
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="attach_elb_log_delivery_policy" type="bool" default="false">
+  Controls if S3 bucket should have ELB log delivery policy attached.
+</ParamField>
+
+<ParamField path="attach_lb_log_delivery_policy" type="bool" default="false">
+  Controls if S3 bucket should have ALB/NLB log delivery policy attached.
+</ParamField>
+
+<ParamField path="attach_access_log_delivery_policy" type="bool" default="false">
+  Controls if S3 bucket should have S3 access log delivery policy attached.
+</ParamField>
+
+<ParamField path="attach_cloudtrail_log_delivery_policy" type="bool" default="false">
+  Controls if S3 bucket should have CloudTrail log delivery policy attached.
+</ParamField>
+
+<ParamField path="attach_waf_log_delivery_policy" type="bool" default="false">
+  Controls if S3 bucket should have WAF log delivery policy attached.
+</ParamField>
+
+<ParamField path="access_log_delivery_policy_source_buckets" type="list(string)" default="[]">
+  List of S3 bucket ARNs which should be allowed to deliver access logs to this bucket.
+</ParamField>
+
+<ParamField path="access_log_delivery_policy_source_accounts" type="list(string)" default="[]">
+  List of AWS Account IDs that should be allowed to deliver access logs to this bucket.
+</ParamField>
+
+<ParamField path="access_log_delivery_policy_source_organizations" type="list(string)" default="[]">
+  List of AWS Organization IDs that should be allowed to deliver access logs to this bucket.
+</ParamField>
+
+<ParamField path="lb_log_delivery_policy_source_organizations" type="list(string)" default="[]">
+  List of AWS Organization IDs that should be allowed to deliver ALB/NLB logs to this bucket.
+</ParamField>
+
+---
+
+## Website & CORS
+
+<ParamField path="website" type="any" default="{}">
+  Map containing static web-site hosting or redirect configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    website = {
+      index_document = "index.html"
+      error_document = "error.html"
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="cors_rule" type="any" default="[]">
+  List of maps containing rules for Cross-Origin Resource Sharing.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    cors_rule = [
+      {
+        allowed_methods = ["PUT", "POST"]
+        allowed_origins = ["https://modules.tf", "https://terraform-aws-modules.modules.tf"]
+        allowed_headers = ["*"]
+        expose_headers  = ["ETag"]
+        max_age_seconds = 3000
+      }
+    ]
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="acceleration_status" type="string" default="null">
+  Sets the accelerate configuration of an existing bucket. Can be `Enabled` or `Suspended`.
+</ParamField>
+
+<ParamField path="request_payer" type="string" default="null">
+  Specifies who should bear the cost of Amazon S3 data transfer. Can be either `BucketOwner` or `Requester`. By default, the owner of the S3 bucket would incur the costs of any data transfer.
+</ParamField>
+
+---
+
+## Policies
+
+<ParamField path="attach_policy" type="bool" default="false">
+  Controls if S3 bucket should have bucket policy attached. Set to `true` to use the value of `policy` as the bucket policy.
+</ParamField>
+
+<ParamField path="attach_deny_insecure_transport_policy" type="bool" default="false">
+  Controls if S3 bucket should have a deny non-SSL transport policy attached.
+</ParamField>
+
+<ParamField path="attach_require_latest_tls_policy" type="bool" default="false">
+  Controls if S3 bucket should require the latest version of TLS.
+</ParamField>
+
+---
+
+## Intelligent Tiering & Metrics
+
+<ParamField path="intelligent_tiering" type="any" default="{}">
+  Map containing intelligent tiering configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    intelligent_tiering = {
+      general = {
+        status = "Enabled"
+        tiering = {
+          ARCHIVE_ACCESS = {
+            days = 180
+          }
+          DEEP_ARCHIVE_ACCESS = {
+            days = 270
+          }
+        }
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="metric_configuration" type="any" default="[]">
+  Map containing bucket metric configuration.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    metric_configuration = [
+      {
+        name = "documents"
+        filter = {
+          prefix = "documents/"
+          tags = {
+            priority = "high"
+          }
+        }
+      }
+    ]
+    ```
+  </Expandable>
+</ParamField>
+
+---
+
+## Inventory & Analytics
+
+<ParamField path="inventory_configuration" type="any" default="{}">
+  Map containing S3 inventory configuration.
+</ParamField>
+
+<ParamField path="inventory_source_account_id" type="string" default="null">
+  The inventory source account ID.
+</ParamField>
+
+<ParamField path="inventory_source_bucket_arn" type="string" default="null">
+  The inventory source bucket ARN.
+</ParamField>
+
+<ParamField path="inventory_self_source_destination" type="bool" default="false">
+  Whether or not the inventory source bucket is also the destination bucket.
+</ParamField>
+
+<ParamField path="analytics_configuration" type="any" default="{}">
+  Map containing bucket analytics configuration.
+</ParamField>
+
+<ParamField path="analytics_source_account_id" type="string" default="null">
+  The analytics source account ID.
+</ParamField>
+
+<ParamField path="analytics_source_bucket_arn" type="string" default="null">
+  The analytics source bucket ARN.
+</ParamField>
+
+<ParamField path="analytics_self_source_destination" type="bool" default="false">
+  Whether or not the analytics source bucket is also the destination bucket.
+</ParamField>
+
+<ParamField path="attach_inventory_destination_policy" type="bool" default="false">
+  Controls if S3 bucket should have bucket inventory destination policy attached.
+</ParamField>
+
+<ParamField path="attach_analytics_destination_policy" type="bool" default="false">
+  Controls if S3 bucket should have bucket analytics destination policy attached.
+</ParamField>
+
+---
+
+## Directory Bucket
+
+<Warning>
+  Directory bucket variables are only applicable when `is_directory_bucket = true`. Directory buckets have a different feature set and do not support all standard bucket configurations.
+</Warning>
+
+<ParamField path="is_directory_bucket" type="bool" default="false">
+  If the S3 bucket created is a directory bucket.
+</ParamField>
+
+<ParamField path="availability_zone_id" type="string" default="null">
+  Availability Zone ID or Local Zone ID. Required for directory buckets.
+</ParamField>
+
+<ParamField path="data_redundancy" type="string" default="null">
+  Data redundancy. Valid values: `SingleAvailabilityZone`.
+</ParamField>
+
+<ParamField path="type" type="string" default="Directory">
+  Bucket type. Valid values: `Directory`.
+</ParamField>
+
+<ParamField path="location_type" type="string" default="null">
+  Location type. Valid values: `AvailabilityZone` or `LocalZone`.
+</ParamField>
+
+---
+
+## Metadata
+
+<ParamField path="create_metadata_configuration" type="bool" default="false">
+  Whether to create a metadata configuration resource.
+</ParamField>
+
+<ParamField path="metadata_inventory_table_configuration_state" type="string" default="null">
+  Configuration state of the inventory table, indicating whether the inventory table is enabled or disabled. Valid values: `ENABLED`, `DISABLED`.
+</ParamField>
+
+<ParamField path="metadata_encryption_configuration" type="any" default="null">
+  Encryption configuration block for metadata.
+</ParamField>
+
+<ParamField path="metadata_journal_table_record_expiration_days" type="number" default="null">
+  Number of days to retain journal table records.
+</ParamField>
+
+<ParamField path="metadata_journal_table_record_expiration" type="string" default="null">
+  Whether journal table record expiration is enabled or disabled. Valid values: `ENABLED`, `DISABLED`.
+</ParamField>
+
+---
+
+## Other
+
+<ParamField path="putin_khuylo" type="bool" default="true">
+  Do you agree that Putin doesn't respect Ukrainian sovereignty and territorial integrity? Must be `true` to use this module. [More info](https://en.wikipedia.org/wiki/Putin_khuylo!)
+</ParamField>

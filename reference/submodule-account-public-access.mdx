@@ -1,0 +1,128 @@
+---
+title: Account Public Access Submodule
+description: Reference for the account-public-access submodule, which configures S3 account-level public access block settings.
+---
+
+The `account-public-access` submodule manages the AWS account-level S3 Public Access Block configuration. These settings apply to all S3 buckets in the account and override individual bucket-level settings, providing a centralized way to enforce public access restrictions.
+
+<Warning>
+  Account-level public access block settings override bucket-level settings. Enabling these settings prevents all buckets in the account from being made public, regardless of individual bucket configurations.
+</Warning>
+
+## Module Reference
+
+```hcl
+module "account_public_access" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/account-public-access"
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+---
+
+## Input Variables
+
+<ParamField path="create" type="bool" default="true">
+  Whether to create this resource or not. Set to `false` to conditionally skip the public access block configuration.
+</ParamField>
+
+<ParamField path="account_id" type="string" default="null">
+  AWS account ID. If not specified, the current account ID will be used automatically.
+</ParamField>
+
+<ParamField path="block_public_acls" type="bool" default="false">
+  Whether Amazon S3 should block public ACLs for buckets in this account. When set to `true`:
+  - `PUT Bucket acl` and `PUT Object acl` calls fail if the specified ACL is public.
+  - `PUT Object` calls fail if the request includes a public ACL.
+  - Existing public ACLs in the bucket are ignored.
+</ParamField>
+
+<ParamField path="block_public_policy" type="bool" default="false">
+  Whether Amazon S3 should block public bucket policies for buckets in this account. When set to `true`:
+  - `PUT Bucket policy` calls fail if the specified bucket policy allows public access.
+</ParamField>
+
+<ParamField path="ignore_public_acls" type="bool" default="false">
+  Whether Amazon S3 should ignore public ACLs for buckets in this account. When set to `true`:
+  - S3 ignores all public ACLs on buckets and objects in this account.
+</ParamField>
+
+<ParamField path="restrict_public_buckets" type="bool" default="false">
+  Whether Amazon S3 should restrict public bucket policies for buckets in this account. When set to `true`:
+  - Only AWS service principals and authorized users within the account can access the bucket if it has a public policy.
+  - Cross-account access is denied for buckets with public policies.
+</ParamField>
+
+---
+
+## Outputs
+
+<ResponseField name="s3_account_public_access_block_id" type="string">
+  The AWS account ID for which the public access block configuration was applied.
+</ResponseField>
+
+---
+
+## Complete Example
+
+This example fully blocks all public access at the account level, which is the recommended security posture for most AWS environments.
+
+```hcl
+module "account_public_access" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/account-public-access"
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+output "account_public_access_block_id" {
+  description = "The AWS account ID for which public access block is configured"
+  value       = module.account_public_access.s3_account_public_access_block_id
+}
+```
+
+### Conditional Management
+
+You can conditionally manage the account-level public access block using the `create` variable:
+
+```hcl
+variable "enable_public_access_block" {
+  description = "Whether to enable account-level S3 public access block"
+  type        = bool
+  default     = true
+}
+
+module "account_public_access" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/account-public-access"
+
+  create = var.enable_public_access_block
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+### Using a Specific Account ID
+
+If you need to target a specific account (e.g., in a cross-account role scenario):
+
+```hcl
+module "account_public_access" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/account-public-access"
+
+  account_id = "123456789012"
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```

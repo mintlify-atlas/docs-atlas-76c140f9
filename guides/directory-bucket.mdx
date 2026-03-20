@@ -1,0 +1,114 @@
+---
+title: Directory Buckets (S3 Express One Zone)
+description: Create S3 Express One Zone directory buckets for single-digit millisecond latency workloads.
+---
+
+S3 Express One Zone directory buckets deliver consistent single-digit millisecond request latency by storing data in a specific Availability Zone. They are optimised for high-throughput workloads such as machine learning training, financial analytics, and media processing.
+
+## Create a directory bucket
+
+Set `is_directory_bucket = true` and supply the required Availability Zone ID:
+
+```hcl
+module "s3_directory_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket               = "my-express-bucket"
+  is_directory_bucket  = true
+  availability_zone_id = "use1-az4"
+  data_redundancy      = "SingleAvailabilityZone"
+  type                 = "Directory"
+  location_type        = "AvailabilityZone"
+}
+```
+
+## Bucket naming
+
+Directory bucket names follow a strict convention imposed by AWS. The module automatically builds the name:
+
+```
+${var.bucket}--${var.availability_zone_id}--x-s3
+```
+
+For the example above the resulting bucket name would be `my-express-bucket--use1-az4--x-s3`.
+
+## Required variables
+
+| Variable | Description | Example value |
+|---|---|---|
+| `is_directory_bucket` | Enable directory bucket mode | `true` |
+| `availability_zone_id` | Availability Zone or Local Zone ID | `"use1-az4"` |
+| `data_redundancy` | Redundancy model | `"SingleAvailabilityZone"` |
+| `type` | Bucket type | `"Directory"` |
+| `location_type` | Location type | `"AvailabilityZone"` or `"LocalZone"` |
+
+## Encryption
+
+Directory buckets support server-side encryption:
+
+```hcl
+module "s3_directory_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket               = "my-express-bucket"
+  is_directory_bucket  = true
+  availability_zone_id = "use1-az4"
+  data_redundancy      = "SingleAvailabilityZone"
+  type                 = "Directory"
+  location_type        = "AvailabilityZone"
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+}
+```
+
+## Output values
+
+| Output | Description |
+|---|---|
+| `s3_directory_bucket_name` | The full bucket name including the AZ suffix |
+| `s3_directory_bucket_arn` | The ARN of the directory bucket |
+
+```hcl
+output "directory_bucket_name" {
+  value = module.s3_directory_bucket.s3_directory_bucket_name
+}
+
+output "directory_bucket_arn" {
+  value = module.s3_directory_bucket.s3_directory_bucket_arn
+}
+```
+
+## Feature availability
+
+Directory buckets do not support all standard S3 features. The module enforces these restrictions automatically by checking `var.is_directory_bucket`:
+
+<Warning>
+The following features are **not available** for directory buckets:
+</Warning>
+
+| Feature | Available |
+|---|---|
+| Versioning | No |
+| ACLs | No |
+| Static website hosting | No |
+| Server access logging | No |
+| Replication | No |
+| Object Lock | No |
+| Intelligent-Tiering | No |
+| Transfer Acceleration | No |
+| Request payment | No |
+| CORS | No |
+| Public access block | No |
+| Lifecycle rules | Yes (limited) |
+| Server-side encryption | Yes |
+| Bucket policy | Yes |
+
+## Lifecycle rules on directory buckets
+
+Directory buckets support a subset of lifecycle rules. Use `lifecycle_rule` as normal — the module routes the configuration to the correct resource (`aws_s3_bucket_lifecycle_configuration`) for both standard and directory bucket types.

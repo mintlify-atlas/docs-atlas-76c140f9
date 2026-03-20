@@ -1,0 +1,236 @@
+---
+title: Storage Class Analytics
+description: Configure S3 Storage Class Analysis to identify objects that should be transitioned to a lower-cost storage class.
+---
+
+## Overview
+
+S3 Storage Class Analysis (Analytics) monitors access patterns for objects in a bucket and generates data that helps you decide when to transition objects to a less-frequently accessed storage class. The analysis can export results to a destination S3 bucket for long-term trend analysis in tools such as Amazon QuickSight or Amazon Redshift.
+
+## The `analytics_configuration` variable
+
+```hcl
+variable "analytics_configuration" {
+  description = "Map containing bucket analytics configuration."
+  type        = any
+  default     = {}
+}
+```
+
+The map key becomes the name of the `aws_s3_bucket_analytics_configuration` resource. Each value supports the following fields:
+
+| Field | Description |
+|---|---|
+| `filter.prefix` | Limit analysis to objects with this key prefix |
+| `filter.tags` | Limit analysis to objects with these tags |
+| `storage_class_analysis.output_schema_version` | Schema version for the exported data (e.g. `"V_1"`) |
+| `storage_class_analysis.destination_bucket_arn` | ARN of the S3 bucket where results are exported |
+| `storage_class_analysis.destination_account_id` | Account ID that owns the destination bucket |
+| `storage_class_analysis.export_format` | Format of the exported data. Defaults to `"CSV"` |
+| `storage_class_analysis.export_prefix` | Key prefix for exported analytics data |
+
+## How the resource is created
+
+For each entry in `analytics_configuration` the module creates one `aws_s3_bucket_analytics_configuration` resource:
+
+```hcl
+resource "aws_s3_bucket_analytics_configuration" "this" {
+  for_each = { for k, v in var.analytics_configuration : k => v if local.create_bucket && !var.is_directory_bucket }
+
+  bucket = aws_s3_bucket.this[0].id
+  name   = each.key
+
+  dynamic "filter" {
+    for_each = length(try(flatten([each.value.filter]), [])) == 0 ? [] : [true]
+
+    content {
+      prefix = try(each.value.filter.prefix, null)
+      tags   = try(each.value.filter.tags, null)
+    }
+  }
+
+  dynamic "storage_class_analysis" {
+    for_each = length(try(flatten([each.value.storage_class_analysis]), [])) == 0 ? [] : [true]
+
+    content {
+      data_export {
+        output_schema_version = try(each.value.storage_class_analysis.output_schema_version, null)
+
+        destination {
+          s3_bucket_destination {
+            bucket_arn        = try(each.value.storage_class_analysis.destination_bucket_arn, aws_s3_bucket.this[0].arn)
+            bucket_account_id = try(each.value.storage_class_analysis.destination_account_id, data.aws_caller_identity.current.id)
+            format            = try(each.value.storage_class_analysis.export_format, "CSV")
+            prefix            = try(each.value.storage_class_analysis.export_prefix, null)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Cross-account analytics delivery
+
+When the analytics destination bucket is in a **different account** from the source bucket, the destination bucket needs a policy that allows the S3 service to write analytics data. The module automates this with three variables:
+
+| Variable | Type | Description |
+|---|---|---|
+| `attach_analytics_destination_policy` | `bool` | Set to `true` on the **destination** bucket to attach the required policy |
+| `analytics_source_bucket_arn` | `string` | ARN of the source bucket that will deliver analytics data |
+| `analytics_source_account_id` | `string` | Account ID of the source bucket owner |
+| `analytics_self_source_destination` | `bool` | Set to `true` when the source and destination bucket are the same |
+
+<Note>
+Always set `attach_policy = true` together with `attach_analytics_destination_policy = true` so the policy is actually applied to the bucket.
+</Note>
+
+## Examples
+
+<Tabs>
+  <Tab title="Filter by prefix (no export)">
+    Analyse only the `documents/` prefix. No export destination is configured — results are visible in the AWS Console.
+
+    ```hcl
+    module "analytics_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket = "my-bucket"
+
+      analytics_configuration = {
+        prefix_documents = {
+          filter = {
+            prefix = "documents/"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Filter by tags, export to same bucket">
+    Analyse objects tagged `production = "true"` and export results to the same bucket.
+
+    ```hcl
+    module "analytics_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket = "my-bucket"
+
+      attach_policy                     = true
+      attach_analytics_destination_policy = true
+      analytics_self_source_destination   = true
+
+      analytics_configuration = {
+        tags = {
+          filter = {
+            tags = {
+              production = "true"
+            }
+          }
+          storage_class_analysis = {
+            output_schema_version = "V_1"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Export to a separate destination bucket">
+    Export analytics data to a separate bucket in the same account. The destination bucket requires its own policy.
+
+    ```hcl
+    # Source bucket
+    module "analytics_configuration_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket        = "my-source-bucket"
+      force_destroy = true
+
+      analytics_configuration = {
+        all = {
+          storage_class_analysis = {
+            destination_bucket_arn = module.analytics_destination_bucket.s3_bucket_arn
+            export_prefix          = "analytics"
+          }
+        }
+      }
+    }
+
+    # Destination bucket — needs the analytics destination policy
+    module "analytics_destination_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket        = "my-analytics-destination"
+      force_destroy = true
+
+      attach_policy                       = true
+      attach_analytics_destination_policy = true
+      analytics_source_bucket_arn         = module.analytics_configuration_bucket.s3_bucket_arn
+      analytics_source_account_id         = data.aws_caller_identity.current.id
+    }
+    ```
+  </Tab>
+  <Tab title="Shared destination for analytics and inventory">
+    The same destination bucket can receive both analytics and inventory data. Set both destination policies on that bucket.
+
+    ```hcl
+    module "analytics_and_inventory_destination_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket        = "shared-destination"
+      force_destroy = true
+      attach_policy = true
+
+      # Analytics policy
+      attach_analytics_destination_policy = true
+      analytics_source_bucket_arn         = module.analytics_configuration_bucket.s3_bucket_arn
+      analytics_source_account_id         = data.aws_caller_identity.current.id
+
+      # Inventory policy
+      attach_inventory_destination_policy = true
+      inventory_source_bucket_arn         = module.inventory_source_bucket.s3_bucket_arn
+      inventory_source_account_id         = data.aws_caller_identity.current.id
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## How the destination policy works
+
+When `attach_analytics_destination_policy = true`, the module attaches a policy based on `aws_iam_policy_document.inventory_and_analytics_destination_policy`. This policy allows the S3 service to write analytics data to the destination bucket from the specified source account and source bucket ARN:
+
+```hcl
+statement {
+  sid    = "destinationInventoryAndAnalyticsPolicy"
+  effect = "Allow"
+
+  actions = ["s3:PutObject"]
+
+  principals {
+    type        = "Service"
+    identifiers = ["s3.amazonaws.com"]
+  }
+
+  condition {
+    test     = "ArnLike"
+    variable = "aws:SourceArn"
+    values   = [var.analytics_source_bucket_arn]  # or the bucket's own ARN when self_source_destination
+  }
+
+  condition {
+    test     = "StringEquals"
+    variable = "aws:SourceAccount"
+    values   = [var.analytics_source_account_id]
+  }
+
+  condition {
+    test     = "StringEquals"
+    variable = "s3:x-amz-acl"
+    values   = ["bucket-owner-full-control"]
+  }
+}
+```
+
+<Warning>
+Analytics configuration is not supported on S3 Directory Buckets. The `aws_s3_bucket_analytics_configuration` resource is skipped automatically when `is_directory_bucket = true`.
+</Warning>

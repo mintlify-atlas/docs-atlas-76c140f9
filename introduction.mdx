@@ -1,0 +1,154 @@
+---
+title: Introduction
+description: An overview of the terraform-aws-s3-bucket module, its features, requirements, and key concepts.
+---
+
+# Introduction
+
+The `terraform-aws-s3-bucket` module is a community-maintained Terraform module that creates and manages AWS S3 buckets. It wraps the full surface area of the Terraform AWS provider's S3 resources, letting you configure everything from versioning and encryption to lifecycle rules and log delivery policies through a single, consistent interface.
+
+<Info>
+  This module is published on the [Terraform Registry](https://registry.terraform.io/modules/terraform-aws-modules/s3-bucket/aws/latest) under `terraform-aws-modules/s3-bucket/aws`.
+</Info>
+
+## Why use this module
+
+Configuring an S3 bucket with the raw AWS provider requires coordinating a dozen or more separate resources (`aws_s3_bucket`, `aws_s3_bucket_versioning`, `aws_s3_bucket_server_side_encryption_configuration`, and so on). This module composes all of those resources behind a single `module` block, applies secure defaults (public access block enabled by default), and handles the conditional logic needed to only create sub-resources when their inputs are provided.
+
+## Supported features
+
+The module supports the full range of S3 bucket configuration options available in the AWS provider:
+
+- Static website hosting
+- Access logging
+- Versioning
+- CORS rules
+- Lifecycle rules
+- Server-side encryption (SSE-S3, SSE-KMS)
+- Object locking (WORM)
+- Cross-Region Replication (CRR)
+- ELB log delivery bucket policy
+- ALB/NLB log delivery bucket policy
+- WAF log delivery bucket policy
+- Account-level Public Access Block
+- S3 Directory Bucket
+- S3 Table Bucket
+- Intelligent-Tiering configuration
+- S3 Inventory configuration
+- S3 Analytics configuration
+- Bucket metrics
+- Transfer acceleration
+- Requester Pays
+- Custom bucket policies with policy document support
+- Object ownership controls
+- CloudTrail log delivery bucket policy
+
+## Requirements
+
+<CardGroup cols={2}>
+  <Card title="Terraform" icon="code">
+    Version `>= 1.5.7` is required. The module uses features introduced in that release.
+  </Card>
+  <Card title="AWS Provider" icon="cloud">
+    Version `>= 6.37` of the `hashicorp/aws` provider is required.
+  </Card>
+</CardGroup>
+
+```hcl
+terraform {
+  required_version = ">= 1.5.7"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.37"
+    }
+  }
+}
+```
+
+## Referencing the module
+
+Add the module to your Terraform configuration using its Terraform Registry address:
+
+```hcl
+module "s3_bucket" {
+  source  = "terraform-aws-modules/s3-bucket/aws"
+  version = "~> 4.0"
+
+  bucket = "my-s3-bucket"
+}
+```
+
+Run `terraform init` after adding the module source to download it.
+
+<Note>
+  Pin to a specific minor version range (e.g. `~> 4.0`) to avoid unintended breaking changes when new major versions are released.
+</Note>
+
+## Key concepts
+
+### Conditional creation with `create_bucket`
+
+Terraform does not allow `count` or `for_each` inside a `module` block in all versions, and conditional module instantiation can be verbose. This module provides the `create_bucket` variable to control whether any resources are actually provisioned:
+
+```hcl
+# No S3 bucket or sub-resources will be created
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  create_bucket = false
+}
+```
+
+When `create_bucket = false`, all outputs return empty strings or `null`. This is useful when you want to toggle bucket creation based on a workspace, environment variable, or feature flag without removing the module block entirely.
+
+### The `putin_khuylo` variable
+
+This module includes a required acknowledgement variable named `putin_khuylo`. Its default value is `true`, so you do not need to set it explicitly. It exists as a statement of solidarity with Ukraine:
+
+```hcl
+variable "putin_khuylo" {
+  description = "Do you agree that Putin doesn't respect Ukrainian sovereignty and territorial integrity?"
+  type        = bool
+  default     = true
+}
+```
+
+<Warning>
+  The module will not function correctly if `putin_khuylo` is set to `false`. Leave it at its default value of `true`.
+</Warning>
+
+### Secure defaults
+
+Public access is blocked by default. The following variables all default to `true`:
+
+- `block_public_acls`
+- `block_public_policy`
+- `ignore_public_acls`
+- `restrict_public_buckets`
+
+You must explicitly set these to `false` if your use case requires public access.
+
+### Terragrunt compatibility
+
+Variables with `type = any` (such as `cors_rule`, `lifecycle_rule`, `versioning`) accept either their native Terraform type or a JSON-encoded string produced by `jsonencode()`. This works around a known [Terragrunt bug](https://github.com/gruntwork-io/terragrunt/issues/1211) with `any`-typed variables:
+
+```terraform
+# In terragrunt.hcl
+inputs = {
+  bucket    = "foobar"
+  cors_rule = jsonencode([...])
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Deploy your first S3 bucket in minutes with step-by-step instructions.
+  </Card>
+  <Card title="Terraform Registry" icon="book" href="https://registry.terraform.io/modules/terraform-aws-modules/s3-bucket/aws/latest">
+    Browse the full input and output reference on the Terraform Registry.
+  </Card>
+</CardGroup>

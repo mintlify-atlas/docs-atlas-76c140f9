@@ -1,0 +1,136 @@
+---
+title: Public Access Block
+description: Control S3 bucket-level and account-level public access settings to prevent unintended exposure of data.
+---
+
+The S3 Public Access Block feature provides a set of controls that let you centrally manage public access to S3 buckets. The module enables all four block settings by default, following the AWS security best practice of keeping buckets private unless explicitly required otherwise.
+
+## How it works
+
+The `aws_s3_bucket_public_access_block` resource is created whenever `attach_public_policy = true` (the default). It applies four independent access block settings to the bucket:
+
+```hcl
+resource "aws_s3_bucket_public_access_block" "this" {
+  count = local.create_bucket && var.attach_public_policy && !var.is_directory_bucket ? 1 : 0
+
+  bucket = aws_s3_bucket.this[0].id
+
+  block_public_acls       = var.block_public_acls
+  block_public_policy     = var.block_public_policy
+  ignore_public_acls      = var.ignore_public_acls
+  restrict_public_buckets = var.restrict_public_buckets
+  skip_destroy            = var.skip_destroy_public_access_block
+}
+```
+
+## Variables
+
+<CardGroup cols={2}>
+  <Card title="block_public_acls" icon="shield">
+    **Default:** `true`
+
+    Blocks any `PutBucketAcl` or `PutObjectAcl` calls that would grant public access. Also blocks new object uploads made with a public ACL.
+  </Card>
+  <Card title="block_public_policy" icon="shield">
+    **Default:** `true`
+
+    Prevents new bucket policies from being applied if they would grant public access to the bucket or its objects.
+  </Card>
+  <Card title="ignore_public_acls" icon="shield">
+    **Default:** `true`
+
+    Causes S3 to ignore all public ACLs on the bucket and its objects. Existing public ACLs are not removed but their grants are not honored.
+  </Card>
+  <Card title="restrict_public_buckets" icon="shield">
+    **Default:** `true`
+
+    Restricts access to the bucket and its objects to only AWS service principals and authorized users within the bucket owner's account. Cross-account access requires explicit identity-based policies.
+  </Card>
+</CardGroup>
+
+### Lifecycle and attachment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `attach_public_policy` | `true` | Whether to create and attach the `aws_s3_bucket_public_access_block` resource. Set to `false` to let upstream infrastructure manage the block settings. |
+| `skip_destroy_public_access_block` | `true` | When `true`, Terraform will not destroy the Public Access Block configuration during `terraform destroy`. This prevents accidental public exposure during teardown. |
+
+## Object Ownership
+
+The module also supports controlling S3 Object Ownership, which interacts closely with ACL-based access:
+
+| Variable | Default | Description |
+|---|---|---|
+| `control_object_ownership` | `false` | Whether to manage `aws_s3_bucket_ownership_controls` on the bucket. |
+| `object_ownership` | `"BucketOwnerEnforced"` | Valid values: `BucketOwnerEnforced`, `BucketOwnerPreferred`, `ObjectWriter`. |
+
+With the default `BucketOwnerEnforced`, ACLs are completely disabled — the bucket owner automatically owns and has full control over every object. This is the recommended setting for most use cases.
+
+## Examples
+
+<CodeGroup>
+
+```hcl Secure private bucket (default)
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-private-bucket"
+
+  # These are all true by default — shown here for clarity
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  attach_public_policy             = true
+  skip_destroy_public_access_block = true
+}
+```
+
+```hcl Static website (public access required)
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-static-website"
+
+  # Disable all public access blocks for a public static website
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+
+  website = {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+}
+```
+
+</CodeGroup>
+
+<Warning>
+  Disabling any of the four block settings opens your bucket and its objects to potential public access. Only disable these settings when your use case explicitly requires it, such as hosting a public static website. Ensure a restrictive bucket policy is in place to limit access to only the operations and principals you intend.
+</Warning>
+
+## Account-level public access
+
+The `block_public_acls`, `block_public_policy`, `ignore_public_acls`, and `restrict_public_buckets` variables control settings at the **bucket level**. AWS also supports configuring these same four settings at the **account level**, which acts as a guard rail across all buckets in the account.
+
+Use the `account-public-access` submodule to manage account-level Public Access Block settings:
+
+```hcl
+module "account_public_access_block" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/account-public-access"
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+See the [S3 Account-level Public Access Block example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/account-public-access) for a complete reference.
+
+<Note>
+  Account-level block settings override bucket-level settings. If the account-level `block_public_policy` is `true`, no bucket policy in the account can grant public access regardless of the bucket-level setting.
+</Note>

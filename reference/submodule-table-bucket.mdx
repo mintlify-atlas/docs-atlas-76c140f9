@@ -1,0 +1,259 @@
+---
+title: Table Bucket Submodule
+description: Reference for the S3 table-bucket submodule, which creates and manages S3 Tables (Apache Iceberg) table buckets.
+---
+
+The `table-bucket` submodule creates and manages S3 Tables resources — purpose-built storage for analytics data using the Apache Iceberg table format. It supports creating a table bucket, configuring encryption and maintenance, attaching bucket-level policies, and creating individual Iceberg tables within the bucket.
+
+<Info>
+  S3 Tables are only available in select AWS regions. See the [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-regions-support.html) for supported regions.
+</Info>
+
+## Module Reference
+
+```hcl
+module "table_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+  table_bucket_name = "my-table-bucket"
+
+  # ... see variables below
+}
+```
+
+---
+
+## Input Variables
+
+### Bucket Configuration
+
+<ParamField path="create" type="bool" default="true">
+  Whether to create S3 table resources. Set to `false` to conditionally skip resource creation.
+</ParamField>
+
+<ParamField path="region" type="string" default="null">
+  Region where the resource(s) will be managed. Defaults to the region set in the provider configuration.
+</ParamField>
+
+<ParamField path="table_bucket_name" type="string" default="null">
+  Name of the table bucket. Must be between 3 and 63 characters in length. Can consist of lowercase letters, numbers, and hyphens, and must begin and end with a lowercase letter or number.
+</ParamField>
+
+<ParamField path="tags" type="map(string)" default="{}">
+  Key-value map of resource tags.
+</ParamField>
+
+### Encryption
+
+<ParamField path="encryption_configuration" type="any" default="null">
+  Map of encryption configurations for the table bucket.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    encryption_configuration = {
+      sse_algorithm       = "aws:kms"
+      kms_master_key_id   = aws_kms_key.this.arn
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+### Maintenance
+
+<ParamField path="maintenance_configuration" type="any" default="null">
+  Map of table bucket maintenance configurations, such as compaction settings.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    maintenance_configuration = {
+      iceberg_unreferenced_file_removal = {
+        status = "enabled"
+        settings = {
+          non_current_days           = 90
+          unreferenced_days          = 3
+        }
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+### Bucket Policy
+
+<ParamField path="create_table_bucket_policy" type="bool" default="false">
+  Whether to create an S3 table bucket policy.
+</ParamField>
+
+<ParamField path="table_bucket_policy" type="string" default="null">
+  An AWS resource-based policy document in JSON format to attach to the table bucket.
+</ParamField>
+
+<ParamField path="table_bucket_source_policy_documents" type="list(string)" default="[]">
+  List of IAM policy documents that are merged together into the exported document. Statements must have unique `sid`s.
+</ParamField>
+
+<ParamField path="table_bucket_override_policy_documents" type="list(string)" default="[]">
+  List of IAM policy documents that are merged together into the exported document. In merging, statements with non-blank `sid`s will override statements with the same `sid`.
+</ParamField>
+
+<ParamField path="table_bucket_policy_statements" type="any" default="{}">
+  A map of IAM policy statements for custom permission usage.
+</ParamField>
+
+### Tables
+
+<ParamField path="tables" type="any" default="{}">
+  Map of table configurations. Each key is a logical name for the table; each value configures the Apache Iceberg table within the bucket.
+
+  <Expandable title="Example configuration">
+    ```hcl
+    tables = {
+      orders = {
+        name   = "orders"
+        format = "ICEBERG"
+      }
+      events = {
+        name   = "events"
+        format = "ICEBERG"
+      }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+---
+
+## Outputs
+
+### Table Bucket
+
+<ResponseField name="s3_table_bucket_arn" type="string">
+  ARN of the table bucket. Returns `null` if the bucket was not created.
+</ResponseField>
+
+<ResponseField name="s3_table_bucket_created_at" type="string">
+  Date and time when the table bucket was created.
+</ResponseField>
+
+<ResponseField name="s3_table_bucket_owner_account_id" type="string">
+  Account ID of the account that owns the table bucket.
+</ResponseField>
+
+### Tables
+
+<ResponseField name="s3_table_arns" type="map(string)">
+  Map of table names to their ARNs.
+</ResponseField>
+
+<ResponseField name="s3_table_created_at" type="map(string)">
+  Map of table names to the dates and times when each table was created.
+</ResponseField>
+
+<ResponseField name="s3_table_created_by" type="map(string)">
+  Map of table names to the account IDs of the accounts that created each table.
+</ResponseField>
+
+<ResponseField name="s3_table_metadata_locations" type="map(string)">
+  Map of table names to the locations of their table metadata.
+</ResponseField>
+
+<ResponseField name="s3_table_modified_at" type="map(string)">
+  Map of table names to the dates and times when each table was last modified.
+</ResponseField>
+
+<ResponseField name="s3_table_modified_by" type="map(string)">
+  Map of table names to the account IDs of the accounts that last modified each table.
+</ResponseField>
+
+<ResponseField name="s3_table_owner_account_ids" type="map(string)">
+  Map of table names to the account IDs of the accounts that own each table.
+</ResponseField>
+
+<ResponseField name="s3_table_types" type="map(string)">
+  Map of table names to their types. One of `customer` or `aws`.
+</ResponseField>
+
+<ResponseField name="s3_table_version_tokens" type="map(string)">
+  Map of table names to identifiers for the current version of each table's data.
+</ResponseField>
+
+<ResponseField name="s3_table_warehouse_locations" type="map(string)">
+  Map of table names to S3 URIs pointing to the S3 Bucket that contains each table's data.
+</ResponseField>
+
+---
+
+## Complete Example
+
+This example creates a table bucket with KMS encryption, maintenance configuration, and two Iceberg tables.
+
+```hcl
+resource "aws_kms_key" "tables" {
+  description             = "KMS key for S3 table bucket encryption"
+  deletion_window_in_days = 7
+}
+
+module "table_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+  table_bucket_name = "my-analytics-table-bucket"
+
+  encryption_configuration = {
+    sse_algorithm     = "aws:kms"
+    kms_master_key_id = aws_kms_key.tables.arn
+  }
+
+  maintenance_configuration = {
+    iceberg_unreferenced_file_removal = {
+      status = "enabled"
+      settings = {
+        non_current_days  = 90
+        unreferenced_days = 3
+      }
+    }
+  }
+
+  create_table_bucket_policy = true
+  table_bucket_policy_statements = {
+    allow_analytics = {
+      sid    = "AllowAnalyticsAccess"
+      effect = "Allow"
+      principals = [
+        {
+          type        = "AWS"
+          identifiers = ["arn:aws:iam::123456789012:role/AnalyticsRole"]
+        }
+      ]
+      actions = [
+        "s3tables:GetTableData",
+        "s3tables:PutTableData",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  tables = {
+    orders = {
+      name   = "orders"
+      format = "ICEBERG"
+    }
+    events = {
+      name   = "events"
+      format = "ICEBERG"
+    }
+  }
+
+  tags = {
+    Environment = "production"
+    Team        = "data-engineering"
+  }
+}
+
+output "table_bucket_arn" {
+  value = module.table_bucket.s3_table_bucket_arn
+}
+
+output "table_arns" {
+  value = module.table_bucket.s3_table_arns
+}
+```

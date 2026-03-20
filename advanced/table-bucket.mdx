@@ -1,0 +1,209 @@
+---
+title: S3 Table Buckets
+description: Use the table-bucket submodule to create S3 Table Buckets backed by Apache Iceberg for analytics and data lake workloads.
+---
+
+## Overview
+
+S3 Table Buckets are a purpose-built storage tier for tabular data that integrates natively with Apache Iceberg. They are designed for analytics workloads, data lakes, and any use case that benefits from open table formats with built-in compaction and maintenance.
+
+<CardGroup cols={2}>
+  <Card title="Apache Iceberg" icon="table">
+    Table buckets expose data through the Iceberg open table format, enabling query engines such as Amazon Athena, Apache Spark, and Trino to read and write tables directly.
+  </Card>
+  <Card title="Managed maintenance" icon="wrench">
+    AWS handles compaction, snapshot expiry, and unreferenced file cleanup so you do not need to run a separate maintenance job.
+  </Card>
+</CardGroup>
+
+## Use cases
+
+- **Analytics pipelines** — store processed event data in Iceberg format for low-latency ad hoc queries.
+- **Data lakes** — land raw and curated data in the same table bucket and query across namespaces.
+- **Audit tables** — maintain a queryable, immutable history of configuration changes or access events.
+- **Machine learning feature stores** — version features as Iceberg snapshots for reproducible training runs.
+
+## Module source
+
+The table-bucket functionality lives in the `modules/table-bucket/` submodule. Reference it with a double-slash path:
+
+```hcl
+module "s3_table_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+  table_bucket_name = "my-analytics-table-bucket"
+
+  tags = {
+    Environment = "production"
+  }
+}
+```
+
+## Resources created
+
+The submodule manages the following AWS resources:
+
+| Resource | Description |
+|---|---|
+| `aws_s3tables_table_bucket` | The S3 Table Bucket itself |
+| `aws_s3tables_table_bucket_policy` | Optional resource-based policy for the table bucket |
+| `aws_s3tables_table` | One or more Iceberg tables inside the bucket |
+| `aws_s3tables_table_policy` | Optional per-table resource-based policies |
+
+## Input variables
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `create` | `bool` | `true` | Whether to create S3 table resources |
+| `region` | `string` | `null` | AWS region. Defaults to the provider region |
+| `table_bucket_name` | `string` | `null` | Name of the table bucket. 3–63 characters, lowercase letters, numbers, and hyphens |
+| `encryption_configuration` | `any` | `null` | Map of encryption configurations |
+| `maintenance_configuration` | `any` | `null` | Map of table bucket maintenance configurations |
+| `create_table_bucket_policy` | `bool` | `false` | Whether to create an S3 table bucket policy |
+| `table_bucket_policy` | `string` | `null` | Raw JSON policy document. When `null`, the policy is built from `table_bucket_policy_statements` |
+| `table_bucket_source_policy_documents` | `list(string)` | `[]` | IAM policy documents merged into the bucket policy (statements must have unique `sid`s) |
+| `table_bucket_override_policy_documents` | `list(string)` | `[]` | IAM policy documents merged into the bucket policy (statements with non-blank `sid`s override matching ones) |
+| `table_bucket_policy_statements` | `any` | `{}` | Map of IAM policy statements for custom permission usage |
+| `tables` | `any` | `{}` | Map of table configurations |
+| `tags` | `map(string)` | `{}` | Key-value map of resource tags |
+
+## Outputs
+
+| Name | Description |
+|---|---|
+| `s3_table_bucket_arn` | ARN of the table bucket |
+| `s3_table_bucket_created_at` | Date and time when the bucket was created |
+| `s3_table_bucket_owner_account_id` | Account ID of the account that owns the table bucket |
+| `s3_table_arns` | Map of table ARNs, keyed by the `tables` map key |
+| `s3_table_created_at` | Map of table creation timestamps |
+| `s3_table_created_by` | Map of account IDs that created each table |
+| `s3_table_metadata_locations` | Map of table metadata locations |
+| `s3_table_modified_at` | Map of last-modified timestamps |
+| `s3_table_modified_by` | Map of account IDs that last modified each table |
+| `s3_table_owner_account_ids` | Map of account IDs that own each table |
+| `s3_table_types` | Map of table types (`customer` or `aws`) |
+| `s3_table_version_tokens` | Map of version tokens for the current table data |
+| `s3_table_warehouse_locations` | Map of S3 URIs pointing to the table data |
+
+## Examples
+
+<Tabs>
+  <Tab title="Table bucket only">
+    Create a table bucket without any tables. Tables can be added later or managed separately.
+
+    ```hcl
+    module "s3_table_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+      table_bucket_name = "my-analytics-bucket"
+
+      tags = {
+        Environment = "production"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Bucket with tables">
+    Create a table bucket and define Iceberg tables inside it. Each entry in `tables` creates one `aws_s3tables_table` resource.
+
+    ```hcl
+    module "s3_table_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+      table_bucket_name = "my-datalake-bucket"
+
+      tables = {
+        events = {
+          format    = "ICEBERG"
+          namespace = "analytics"
+
+          metadata = {
+            iceberg = {
+              schema = {
+                field = [
+                  { name = "event_id",   type = "string",    required = true },
+                  { name = "event_time", type = "timestamp", required = true },
+                  { name = "user_id",    type = "long" },
+                  { name = "payload",    type = "string" }
+                ]
+              }
+            }
+          }
+        }
+
+        users = {
+          format    = "ICEBERG"
+          namespace = "analytics"
+
+          metadata = {
+            iceberg = {
+              schema = {
+                field = [
+                  { name = "user_id",    type = "long",   required = true },
+                  { name = "email",      type = "string", required = true },
+                  { name = "created_at", type = "timestamp" }
+                ]
+              }
+            }
+          }
+        }
+      }
+
+      tags = {
+        Environment = "production"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Bucket with policy">
+    Attach a resource-based policy to the table bucket using inline policy statements.
+
+    ```hcl
+    module "s3_table_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws//modules/table-bucket"
+
+      table_bucket_name          = "my-analytics-bucket"
+      create_table_bucket_policy = true
+
+      table_bucket_policy_statements = {
+        allow_athena = {
+          sid     = "AllowAthenaQuery"
+          effect  = "Allow"
+          actions = ["s3tables:GetTableData", "s3tables:PutTableData"]
+
+          principals = [
+            {
+              type        = "Service"
+              identifiers = ["athena.amazonaws.com"]
+            }
+          ]
+        }
+      }
+
+      tags = {
+        Environment = "production"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Referencing outputs
+
+```hcl
+output "table_bucket_arn" {
+  value = module.s3_table_bucket.s3_table_bucket_arn
+}
+
+output "events_table_arn" {
+  value = module.s3_table_bucket.s3_table_arns["events"]
+}
+
+output "warehouse_locations" {
+  value = module.s3_table_bucket.s3_table_warehouse_locations
+}
+```
+
+<Note>
+S3 Table Buckets and the `aws_s3tables_*` resources require AWS provider version `>= 6.37` and Terraform `>= 1.5.7`.
+</Note>

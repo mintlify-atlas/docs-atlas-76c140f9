@@ -1,0 +1,193 @@
+---
+title: Event Notifications
+description: Send S3 event notifications to Lambda functions, SQS queues, and SNS topics using the notification submodule.
+---
+
+S3 event notifications deliver messages when objects are created, deleted, restored, or replicated. The `modules/notification` submodule configures these notifications and automatically creates the IAM permissions needed for S3 to invoke Lambda, send to SQS, or publish to SNS.
+
+## Module reference
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  # ... notification configuration
+}
+```
+
+## Variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `bucket` | `string` | Name of the S3 bucket |
+| `bucket_arn` | `string` | ARN of the S3 bucket (used in IAM policies) |
+| `lambda_notifications` | `any` | Map of Lambda function notification configurations |
+| `sqs_notifications` | `any` | Map of SQS queue notification configurations |
+| `sns_notifications` | `any` | Map of SNS topic notification configurations |
+| `eventbridge` | `bool` | Enable EventBridge notifications |
+| `create_lambda_permission` | `bool` | Create `aws_lambda_permission` resources (default `true`) |
+| `create_sqs_policy` | `bool` | Create SQS queue policies (default `true`) |
+| `create_sns_policy` | `bool` | Create SNS topic policies (default `true`) |
+
+## Lambda notifications
+
+The submodule creates an `aws_lambda_permission` granting `s3.amazonaws.com` the right to invoke the function, then registers the notification.
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  lambda_notifications = {
+    lambda1 = {
+      function_arn  = aws_lambda_function.this.arn
+      function_name = aws_lambda_function.this.function_name
+      events        = ["s3:ObjectCreated:*"]
+      filter_prefix = "prefix/"
+      filter_suffix = ".jpg"
+    }
+  }
+}
+```
+
+### Lambda notification fields
+
+| Field | Description |
+|---|---|
+| `function_arn` | ARN of the Lambda function |
+| `function_name` | Name of the Lambda function (used in `aws_lambda_permission`) |
+| `events` | List of S3 event types (e.g. `s3:ObjectCreated:*`) |
+| `filter_prefix` | Only notify for keys with this prefix |
+| `filter_suffix` | Only notify for keys with this suffix |
+| `qualifier` | Lambda alias or version qualifier |
+| `source_account` | Source account for the Lambda permission |
+
+## SQS notifications
+
+The submodule creates an `aws_sqs_queue_policy` allowing `s3.amazonaws.com` to call `sqs:SendMessage` on the queue.
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  sqs_notifications = {
+    queue1 = {
+      queue_arn     = aws_sqs_queue.this.arn
+      events        = ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]
+      filter_prefix = "uploads/"
+    }
+  }
+}
+```
+
+### SQS notification fields
+
+| Field | Description |
+|---|---|
+| `queue_arn` | ARN of the SQS queue |
+| `events` | List of S3 event types |
+| `filter_prefix` | Only notify for keys with this prefix |
+| `filter_suffix` | Only notify for keys with this suffix |
+| `queue_id` | Optional explicit queue URL (derived from ARN if omitted) |
+
+## SNS notifications
+
+The submodule creates an `aws_sns_topic_policy` allowing `s3.amazonaws.com` to call `sns:Publish` on the topic.
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  sns_notifications = {
+    topic1 = {
+      topic_arn     = aws_sns_topic.this.arn
+      events        = ["s3:ObjectCreated:*"]
+      filter_suffix = ".csv"
+    }
+  }
+}
+```
+
+### SNS notification fields
+
+| Field | Description |
+|---|---|
+| `topic_arn` | ARN of the SNS topic |
+| `events` | List of S3 event types |
+| `filter_prefix` | Only notify for keys with this prefix |
+| `filter_suffix` | Only notify for keys with this suffix |
+
+## Combined notifications
+
+You can configure Lambda, SQS, and SNS notifications in a single module call:
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket     = module.s3_bucket.s3_bucket_id
+  bucket_arn = module.s3_bucket.s3_bucket_arn
+
+  lambda_notifications = {
+    process_image = {
+      function_arn  = aws_lambda_function.process_image.arn
+      function_name = aws_lambda_function.process_image.function_name
+      events        = ["s3:ObjectCreated:*"]
+      filter_suffix = ".jpg"
+    }
+  }
+
+  sqs_notifications = {
+    audit_queue = {
+      queue_arn = aws_sqs_queue.audit.arn
+      events    = ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]
+    }
+  }
+
+  sns_notifications = {
+    alert_topic = {
+      topic_arn     = aws_sns_topic.alerts.arn
+      events        = ["s3:ObjectCreated:*"]
+      filter_prefix = "critical/"
+    }
+  }
+}
+```
+
+## EventBridge
+
+To forward all S3 events to Amazon EventBridge (for fine-grained routing and filtering):
+
+```hcl
+module "s3_notification" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/notification"
+
+  bucket      = module.s3_bucket.s3_bucket_id
+  eventbridge = true
+}
+```
+
+## Common S3 event types
+
+| Event | Triggered when |
+|---|---|
+| `s3:ObjectCreated:*` | Any object creation (Put, Post, Copy, multipart) |
+| `s3:ObjectCreated:Put` | `PutObject` only |
+| `s3:ObjectRemoved:*` | Any object deletion |
+| `s3:ObjectRemoved:Delete` | Permanent delete |
+| `s3:ObjectRemoved:DeleteMarkerCreated` | Delete marker created (versioned bucket) |
+| `s3:ObjectRestore:*` | Glacier restore initiated or completed |
+| `s3:Replication:*` | Replication events |
+
+See the [S3 Notifications example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/notification) for a complete working configuration with Lambda, SQS, and SNS.

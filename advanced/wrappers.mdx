@@ -1,0 +1,198 @@
+---
+title: Module Wrappers
+description: Create multiple S3 buckets from a single configuration using Terraform for_each or the bundled Terragrunt wrapper module.
+---
+
+## Overview
+
+There are two approaches for creating multiple similar S3 buckets with this module:
+
+1. **Terraform `for_each`** — available since Terraform 0.13, works natively in any Terraform workflow.
+2. **Wrapper module** — a thin wrapper in the `wrappers/` directory designed for Terragrunt users who want a single configuration file to manage multiple buckets.
+
+<CardGroup cols={2}>
+  <Card title="Terraform for_each" icon="repeat">
+    Use the native `for_each` meta-argument inside a `module` block to create multiple buckets from a single module source.
+  </Card>
+  <Card title="Terragrunt Wrapper" icon="layer-group">
+    Use the `//wrappers` sub-path to pass a map of bucket configurations from a single `terragrunt.hcl`.
+  </Card>
+</CardGroup>
+
+## Using `for_each` in a module block
+
+Terraform 0.13 introduced [`for_each` as a module meta-argument](https://www.terraform.io/language/meta-arguments/for_each). You can use it directly with this module to create several buckets without repeating the module block.
+
+```hcl
+module "s3_buckets" {
+  source   = "terraform-aws-modules/s3-bucket/aws"
+  for_each = toset(["bucket-a", "bucket-b", "bucket-c"])
+
+  bucket        = each.value
+  force_destroy = true
+
+  tags = {
+    Name = each.value
+  }
+}
+```
+
+Each bucket is addressable as `module.s3_buckets["bucket-a"]`, `module.s3_buckets["bucket-b"]`, etc.
+
+For a more complex scenario where each bucket needs different configuration, use a map:
+
+```hcl
+locals {
+  buckets = {
+    logs = {
+      attach_elb_log_delivery_policy = true
+      force_destroy                  = true
+    }
+    assets = {
+      versioning = { enabled = true }
+    }
+    backups = {
+      versioning    = { enabled = true }
+      force_destroy = false
+    }
+  }
+}
+
+module "s3_buckets" {
+  source   = "terraform-aws-modules/s3-bucket/aws"
+  for_each = local.buckets
+
+  bucket = each.key
+
+  attach_elb_log_delivery_policy = try(each.value.attach_elb_log_delivery_policy, false)
+  versioning                     = try(each.value.versioning, {})
+  force_destroy                  = try(each.value.force_destroy, false)
+}
+```
+
+## The `wrappers/` directory
+
+The `wrappers/` directory contains a thin wrapper module that uses `for_each` internally. It accepts two variables:
+
+| Variable | Type | Description |
+|---|---|---|
+| `items` | `any` | Map of bucket configurations. Each key becomes one bucket. |
+| `defaults` | `any` | Default values applied to every item unless overridden. |
+
+Every argument supported by the root module is supported by the wrapper. Item-level values override `defaults`.
+
+### Output
+
+The wrapper exposes a single `wrapper` output that is a map of all module outputs, keyed by the same keys as `items`:
+
+```hcl
+output "wrapper" {
+  description = "Map of outputs of a wrapper."
+  value       = module.wrapper
+}
+```
+
+## Usage with Terraform
+
+```hcl
+module "wrapper" {
+  source = "terraform-aws-modules/s3-bucket/aws//wrappers"
+
+  defaults = {
+    force_destroy = true
+    tags = {
+      Terraform   = "true"
+      Environment = "dev"
+    }
+  }
+
+  items = {
+    my-item = {
+      # any argument supported by the module
+    }
+    my-second-item = {
+      # any argument supported by the module
+    }
+  }
+}
+```
+
+## Usage with Terragrunt
+
+Terragrunt users can use the wrapper to manage multiple buckets from a single `terragrunt.hcl`, avoiding the need for one file per bucket.
+
+<Tabs>
+  <Tab title="Simple example">
+    ```hcl
+    # terragrunt.hcl
+    terraform {
+      source = "tfr:///terraform-aws-modules/s3-bucket/aws//wrappers"
+      # Alternative source:
+      # source = "git::git@github.com:terraform-aws-modules/terraform-aws-s3-bucket.git//wrappers?ref=master"
+    }
+
+    inputs = {
+      defaults = {
+        tags = {
+          Terraform   = "true"
+          Environment = "dev"
+        }
+      }
+
+      items = {
+        my-item = {
+          # omitted... can be any argument supported by the module
+        }
+        my-second-item = {
+          # omitted... can be any argument supported by the module
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Multiple buckets with shared defaults">
+    ```hcl
+    # eu-west-1/s3-buckets/terragrunt.hcl
+    terraform {
+      source = "tfr:///terraform-aws-modules/s3-bucket/aws//wrappers"
+    }
+
+    inputs = {
+      defaults = {
+        force_destroy = true
+
+        attach_elb_log_delivery_policy        = true
+        attach_lb_log_delivery_policy         = true
+        attach_deny_insecure_transport_policy = true
+        attach_require_latest_tls_policy      = true
+      }
+
+      items = {
+        bucket1 = {
+          bucket = "my-random-bucket-1"
+        }
+        bucket2 = {
+          bucket = "my-random-bucket-2"
+          tags = {
+            Secure = "probably"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+When using the wrapper from Terragrunt, `type = any` variables such as `versioning`, `lifecycle_rule`, and `cors_rule` must still be wrapped in `jsonencode()`. See [Terragrunt Compatibility](/advanced/terragrunt) for the full list.
+</Note>
+
+## Accessing wrapper outputs
+
+Because the wrapper emits a single `wrapper` output that is a map, you access individual bucket outputs by key:
+
+```hcl
+output "bucket1_arn" {
+  value = module.wrapper.wrapper["bucket1"].s3_bucket_arn
+}
+```

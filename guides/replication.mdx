@@ -1,0 +1,240 @@
+---
+title: Cross-Region & Same-Region Replication
+description: Automatically replicate S3 objects to destination buckets in the same or different AWS regions.
+---
+
+S3 replication copies new objects from a source bucket to one or more destination buckets automatically. There are two flavours:
+
+- **Cross-Region Replication (CRR)** — source and destination are in different AWS regions. Use for disaster recovery, compliance, and latency reduction.
+- **Same-Region Replication (SRR)** — source and destination are in the same region. Use for log aggregation or production-to-test data copying.
+
+<Warning>
+Versioning must be enabled on **both** the source and destination buckets before replication can be configured. The module enables versioning first via `depends_on` internally.
+</Warning>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Enable versioning on the source bucket">
+    ```hcl
+    module "s3_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket = "origin-s3-bucket"
+
+      versioning = {
+        enabled = true
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create and version the destination bucket">
+    ```hcl
+    module "replica_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      providers = {
+        aws = aws.replica
+      }
+
+      bucket = "replica-s3-bucket"
+
+      versioning = {
+        enabled = true
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create an IAM replication role">
+    S3 replication requires an IAM role that permits the S3 service to read from the source and write to the destination. See the [s3-replication example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-replication) for the complete IAM configuration.
+  </Step>
+</Steps>
+
+## Basic replication configuration
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "origin-s3-bucket"
+
+  versioning = {
+    enabled = true
+  }
+
+  replication_configuration = {
+    role = aws_iam_role.replication.arn
+
+    rules = [
+      {
+        id     = "replicate-everything"
+        status = true
+
+        destination = {
+          bucket        = module.replica_bucket.s3_bucket_arn
+          storage_class = "STANDARD"
+        }
+      }
+    ]
+  }
+}
+```
+
+## Complete replication example with KMS and filters
+
+The following example mirrors the [s3-replication example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-replication) and shows KMS encryption, prefix filters, delete marker replication, and Replication Time Control (RTC):
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = local.bucket_name
+
+  versioning = {
+    enabled = true
+  }
+
+  replication_configuration = {
+    role = aws_iam_role.replication.arn
+
+    rules = [
+      {
+        id       = "something-with-kms-and-filter"
+        status   = true
+        priority = 10
+
+        delete_marker_replication = false
+
+        source_selection_criteria = {
+          replica_modifications = {
+            status = "Enabled"
+          }
+          sse_kms_encrypted_objects = {
+            enabled = true
+          }
+        }
+
+        filter = {
+          prefix = "one"
+          tags = {
+            ReplicateMe = "Yes"
+          }
+        }
+
+        destination = {
+          bucket        = "arn:aws:s3:::${local.destination_bucket_name}"
+          storage_class = "STANDARD"
+
+          replica_kms_key_id = aws_kms_key.replica.arn
+          account_id         = data.aws_caller_identity.current.account_id
+
+          access_control_translation = {
+            owner = "Destination"
+          }
+
+          replication_time = {
+            status  = "Enabled"
+            minutes = 15
+          }
+
+          metrics = {
+            status  = "Enabled"
+            minutes = 15
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## Rule configuration reference
+
+### Filters
+
+Filters limit which objects a rule applies to. If no `filter` is supplied the rule applies to all objects.
+
+```hcl
+# Single prefix filter
+filter = {
+  prefix = "logs/"
+}
+
+# Multiple conditions (AND logic)
+filter = {
+  prefix = "log1/"
+  tags = {
+    ReplicateMe = "Yes"
+  }
+}
+```
+
+### Delete marker replication
+
+Control whether delete markers on the source are replicated to the destination:
+
+```hcl
+delete_marker_replication = false   # or true / "Enabled" / "Disabled"
+```
+
+### Existing object replication
+
+To replicate objects that existed before replication was enabled, set `existing_object_replication`:
+
+```hcl
+existing_object_replication = "Enabled"
+```
+
+<Note>
+Existing object replication requires a one-time Batch Operations job and AWS Support contact. See the [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-what-is-isnot-replicated.html) for details.
+</Note>
+
+### Destination storage class
+
+You can change the storage class of replicated objects independently of the source:
+
+| Value | Description |
+|---|---|
+| `STANDARD` | Standard storage (default) |
+| `STANDARD_IA` | Infrequent Access |
+| `ONEZONE_IA` | Single-AZ Infrequent Access |
+| `GLACIER` | Glacier Flexible Retrieval |
+| `DEEP_ARCHIVE` | Glacier Deep Archive |
+| `INTELLIGENT_TIERING` | Automatic tiering |
+
+## Multi-rule example
+
+You can define multiple rules with different priorities and filters:
+
+```hcl
+replication_configuration = {
+  role = aws_iam_role.replication.arn
+
+  rules = [
+    {
+      id       = "high-priority"
+      priority = 10
+      status   = true
+      filter   = { prefix = "critical/" }
+      destination = {
+        bucket        = "arn:aws:s3:::destination-bucket"
+        storage_class = "STANDARD"
+      }
+    },
+    {
+      id       = "low-priority"
+      priority = 20
+      status   = true
+      filter   = { prefix = "archive/" }
+      destination = {
+        bucket        = "arn:aws:s3:::destination-bucket"
+        storage_class = "GLACIER"
+      }
+    }
+  ]
+}
+```
+
+<Tip>
+See the complete [s3-replication example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/s3-replication) for the full IAM role and policy setup needed to enable replication.
+</Tip>

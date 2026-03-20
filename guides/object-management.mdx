@@ -1,0 +1,207 @@
+---
+title: Object Management, CORS & Advanced Features
+description: Manage S3 objects, configure CORS, Transfer Acceleration, Requester Pays, Intelligent-Tiering, and CloudWatch metrics.
+---
+
+## Object submodule
+
+The `modules/object` submodule lets you manage individual S3 objects as Terraform resources. Use it when you need to upload configuration files, static assets, or seed data as part of your infrastructure.
+
+```hcl
+module "s3_object" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/object"
+
+  bucket       = module.s3_bucket.s3_bucket_id
+  key          = "configs/app-config.json"
+  file_source  = "${path.module}/files/app-config.json"
+  content_type = "application/json"
+
+  tags = {
+    Environment = "production"
+  }
+}
+```
+
+### Object variables
+
+| Variable | Description |
+|---|---|
+| `bucket` | Name or ARN of the target bucket |
+| `key` | Object key (path within the bucket) |
+| `file_source` | Path to a local file to upload |
+| `content` | Literal UTF-8 string content |
+| `content_base64` | Base64-encoded binary content |
+| `content_type` | MIME type (e.g. `application/json`) |
+| `storage_class` | Storage class for the object |
+| `server_side_encryption` | `"AES256"` or `"aws:kms"` |
+| `kms_key_id` | KMS key ARN for SSE-KMS |
+| `bucket_key_enabled` | Use S3 Bucket Keys for SSE-KMS |
+| `object_lock_mode` | `"GOVERNANCE"` or `"COMPLIANCE"` |
+| `object_lock_retain_until_date` | Retention date in RFC3339 format |
+| `force_destroy` | Allow deletion when Object Lock is enabled |
+| `metadata` | Map of `x-amz-meta-*` metadata keys |
+| `tags` | Tags to assign to the object |
+
+See the [S3 Object example](https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/tree/master/examples/object) for a complete configuration.
+
+## CORS configuration
+
+Cross-Origin Resource Sharing (CORS) allows web applications from other domains to make requests to your bucket. Configure it with the `cors_rule` variable:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  cors_rule = [
+    {
+      allowed_methods = ["PUT", "POST"]
+      allowed_origins = ["https://modules.tf", "https://terraform-aws-modules.modules.tf"]
+      allowed_headers = ["*"]
+      expose_headers  = ["ETag"]
+      max_age_seconds = 3000
+    },
+    {
+      allowed_methods = ["PUT"]
+      allowed_origins = ["https://example.com"]
+      allowed_headers = ["*"]
+      expose_headers  = ["ETag"]
+      max_age_seconds = 3000
+    }
+  ]
+}
+```
+
+### CORS rule fields
+
+| Field | Required | Description |
+|---|---|---|
+| `allowed_methods` | Yes | HTTP methods: `GET`, `PUT`, `POST`, `DELETE`, `HEAD` |
+| `allowed_origins` | Yes | Origins allowed to make cross-origin requests |
+| `allowed_headers` | No | Request headers the browser is allowed to send |
+| `expose_headers` | No | Response headers the browser can access |
+| `max_age_seconds` | No | Seconds the browser caches the preflight response |
+| `id` | No | Unique identifier for the rule |
+
+<Note>
+CORS is not available for directory buckets.
+</Note>
+
+## Transfer Acceleration
+
+Transfer Acceleration routes uploads through Amazon CloudFront edge locations, reducing latency for clients far from the bucket's region:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket              = "my-s3-bucket"
+  acceleration_status = "Enabled"
+}
+```
+
+Valid values for `acceleration_status`: `"Enabled"` or `"Suspended"`.
+
+## Requester Pays
+
+By default the bucket owner pays for data transfer. Set `request_payer = "Requester"` to charge the requester instead:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket        = "my-s3-bucket"
+  request_payer = "Requester"
+}
+```
+
+Valid values: `"BucketOwner"` (default) or `"Requester"`.
+
+## Intelligent-Tiering
+
+Intelligent-Tiering automatically moves objects between access tiers based on usage patterns. Configure it with the `intelligent_tiering` map:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  intelligent_tiering = {
+    general = {
+      status = "Enabled"
+      filter = {
+        prefix = "/"
+        tags = {
+          Environment = "dev"
+        }
+      }
+      tiering = {
+        ARCHIVE_ACCESS = {
+          days = 180
+        }
+      }
+    }
+    documents = {
+      status = false
+      filter = {
+        prefix = "documents/"
+      }
+      tiering = {
+        ARCHIVE_ACCESS = {
+          days = 125
+        }
+        DEEP_ARCHIVE_ACCESS = {
+          days = 200
+        }
+      }
+    }
+  }
+}
+```
+
+### Intelligent-Tiering access tiers
+
+| Tier | Minimum days | Description |
+|---|---|---|
+| `ARCHIVE_ACCESS` | 90 | Objects not accessed for 90+ days |
+| `DEEP_ARCHIVE_ACCESS` | 180 | Objects not accessed for 180+ days |
+
+## CloudWatch metrics
+
+Use `metric_configuration` to publish per-prefix or per-tag request metrics to CloudWatch:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  metric_configuration = [
+    {
+      name = "documents"
+      filter = {
+        prefix = "documents/"
+        tags = {
+          priority = "high"
+        }
+      }
+    },
+    {
+      name = "other"
+      filter = {
+        tags = {
+          production = "true"
+        }
+      }
+    },
+    {
+      name = "all"
+      # no filter = metrics for every object
+    }
+  ]
+}
+```
+
+Each entry creates an `aws_s3_bucket_metric` resource. Metrics appear in CloudWatch under the `AWS/S3` namespace and are available for use in alarms and dashboards.

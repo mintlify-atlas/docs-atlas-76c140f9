@@ -1,0 +1,259 @@
+---
+title: Lifecycle Rules
+description: Automate object transitions and expirations to reduce storage costs over time.
+---
+
+Lifecycle rules let you automatically transition objects to cheaper storage classes and expire them when they are no longer needed. The module accepts a list of rule maps via the `lifecycle_rule` variable.
+
+## Basic transition and expiration
+
+The following rule transitions objects tagged with `some=value` through progressively cheaper storage and expires them after 90 days:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  versioning = {
+    enabled = true
+  }
+
+  lifecycle_rule = [
+    {
+      id      = "log"
+      enabled = true
+
+      filter = {
+        tags = {
+          some    = "value"
+          another = "value2"
+        }
+      }
+
+      transition = [
+        {
+          days          = 30
+          storage_class = "ONEZONE_IA"
+        },
+        {
+          days          = 60
+          storage_class = "GLACIER"
+        }
+      ]
+
+      expiration = {
+        days = 90
+      }
+    }
+  ]
+}
+```
+
+## Noncurrent version management
+
+For versioned buckets you can separately control what happens to older versions:
+
+```hcl
+lifecycle_rule = [
+  {
+    id      = "noncurrent-version-management"
+    enabled = true
+
+    abort_incomplete_multipart_upload_days = 7
+
+    noncurrent_version_transition = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      },
+      {
+        days          = 60
+        storage_class = "ONEZONE_IA"
+      },
+      {
+        days          = 90
+        storage_class = "GLACIER"
+      }
+    ]
+
+    noncurrent_version_expiration = {
+      days = 300
+    }
+  }
+]
+```
+
+## Filter options
+
+Filters control which objects a rule applies to. If `filter` is omitted the rule applies to all objects.
+
+<Tabs>
+  <Tab title="Prefix filter">
+    ```hcl
+    filter = {
+      prefix = "logs/"
+    }
+    ```
+  </Tab>
+  <Tab title="Tag filter">
+    ```hcl
+    filter = {
+      tags = {
+        Environment = "dev"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Size + prefix + tags">
+    ```hcl
+    filter = {
+      prefix                   = "log1/"
+      object_size_greater_than = 200000
+      object_size_less_than    = 500000
+      tags = {
+        some    = "value"
+        another = "value2"
+      }
+    }
+    ```
+    When more than one condition is present the module automatically wraps them in an `and` block.
+  </Tab>
+</Tabs>
+
+## Abort incomplete multipart uploads
+
+Incomplete multipart uploads accrue storage charges indefinitely. Set `abort_incomplete_multipart_upload_days` to clean them up automatically:
+
+```hcl
+lifecycle_rule = [
+  {
+    id      = "abort-multipart"
+    enabled = true
+
+    abort_incomplete_multipart_upload_days = 7
+  }
+]
+```
+
+## Delete markers
+
+When all versions of an object are expired, S3 leaves behind a delete marker. Remove it automatically:
+
+```hcl
+expiration = {
+  expired_object_delete_marker = true
+}
+```
+
+## Transition default minimum object size
+
+By default S3 transitions only objects that are at least 128 KB (`all_storage_classes_128K`). You can change this behaviour with `transition_default_minimum_object_size`:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+
+  transition_default_minimum_object_size = "varies_by_storage_class"
+
+  lifecycle_rule = [ ... ]
+}
+```
+
+Valid values:
+
+| Value | Description |
+|---|---|
+| `all_storage_classes_128K` | Objects smaller than 128 KB are never transitioned (default) |
+| `varies_by_storage_class` | Each storage class applies its own minimum size threshold |
+
+## Storage class reference
+
+| Storage class | Minimum storage duration | Typical use |
+|---|---|---|
+| `STANDARD_IA` | 30 days | Infrequently accessed, rapid retrieval |
+| `ONEZONE_IA` | 30 days | Infrequent access, single AZ |
+| `INTELLIGENT_TIERING` | None | Unknown or changing access patterns |
+| `GLACIER` | 90 days | Archive, minutes-to-hours retrieval |
+| `DEEP_ARCHIVE` | 180 days | Long-term archive, 12-hour retrieval |
+
+## Complete multi-rule example
+
+```hcl
+lifecycle_rule = [
+  {
+    id      = "log"
+    enabled = true
+
+    filter = {
+      tags = {
+        some    = "value"
+        another = "value2"
+      }
+    }
+
+    transition = [
+      {
+        days          = 30
+        storage_class = "ONEZONE_IA"
+      },
+      {
+        days          = 60
+        storage_class = "GLACIER"
+      }
+    ]
+  },
+  {
+    id      = "log1"
+    enabled = true
+
+    abort_incomplete_multipart_upload_days = 7
+
+    noncurrent_version_transition = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      },
+      {
+        days          = 60
+        storage_class = "ONEZONE_IA"
+      },
+      {
+        days          = 90
+        storage_class = "GLACIER"
+      }
+    ]
+
+    noncurrent_version_expiration = {
+      days = 300
+    }
+  },
+  {
+    id      = "log2"
+    enabled = true
+
+    filter = {
+      prefix                   = "log1/"
+      object_size_greater_than = 200000
+      object_size_less_than    = 500000
+      tags = {
+        some    = "value"
+        another = "value2"
+      }
+    }
+
+    noncurrent_version_transition = [
+      {
+        days          = 30
+        storage_class = "STANDARD_IA"
+      }
+    ]
+
+    noncurrent_version_expiration = {
+      days = 300
+    }
+  }
+]
+```

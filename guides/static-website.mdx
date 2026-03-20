@@ -1,0 +1,165 @@
+---
+title: Static Website Hosting
+description: Host a static website directly from an S3 bucket with index documents, error pages, and routing rules.
+---
+
+S3 static website hosting lets you serve HTML, CSS, JavaScript, and other static assets directly from a bucket over HTTP. Configure it with the `website` variable.
+
+<Warning>
+Static website hosting over plain HTTP requires the bucket to allow public read access. You must set `block_public_acls = false`, `block_public_policy = false`, `ignore_public_acls = false`, and `restrict_public_buckets = false`, and attach an appropriate bucket policy. For HTTPS, use CloudFront in front of the bucket instead.
+</Warning>
+
+## Index and error documents
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-static-website-bucket"
+
+  website = {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+}
+```
+
+## Redirect all requests
+
+To redirect every request to another host — for example when migrating to a new domain — use `redirect_all_requests_to`. This option conflicts with `index_document` and `error_document`.
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-redirect-bucket"
+
+  website = {
+    redirect_all_requests_to = {
+      host_name = "https://modules.tf"
+    }
+  }
+}
+```
+
+You can also include a `protocol` key (`http` or `https`) to control the scheme of the redirect target.
+
+## Routing rules
+
+Routing rules let you conditionally redirect requests based on the key prefix or HTTP error code returned:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-static-website-bucket"
+
+  website = {
+    index_document = "index.html"
+    error_document = "error.html"
+
+    routing_rules = [
+      {
+        condition = {
+          key_prefix_equals = "docs/"
+        }
+        redirect = {
+          replace_key_prefix_with = "documents/"
+        }
+      },
+      {
+        condition = {
+          http_error_code_returned_equals = 404
+          key_prefix_equals               = "archive/"
+        }
+        redirect = {
+          host_name          = "archive.myhost.com"
+          http_redirect_code = 301
+          protocol           = "https"
+          replace_key_with   = "not_found.html"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Routing rule fields
+
+**Condition block:**
+
+| Field | Description |
+|---|---|
+| `key_prefix_equals` | Redirect when the key starts with this prefix |
+| `http_error_code_returned_equals` | Redirect when S3 returns this HTTP error code |
+
+**Redirect block:**
+
+| Field | Description |
+|---|---|
+| `host_name` | Redirect to this hostname |
+| `http_redirect_code` | HTTP status code for the redirect (default 301) |
+| `protocol` | `http` or `https` |
+| `replace_key_prefix_with` | Replace the matching prefix in the key |
+| `replace_key_with` | Replace the entire key |
+
+## Output values
+
+After applying, use these outputs to wire the bucket into DNS or CloudFront:
+
+```hcl
+output "website_endpoint" {
+  value = module.s3_bucket.s3_bucket_website_endpoint
+}
+
+output "website_domain" {
+  value = module.s3_bucket.s3_bucket_website_domain
+}
+```
+
+| Output | Example value |
+|---|---|
+| `s3_bucket_website_endpoint` | `my-bucket.s3-website-eu-west-1.amazonaws.com` |
+| `s3_bucket_website_domain` | `s3-website-eu-west-1.amazonaws.com` |
+
+The `s3_bucket_website_domain` value is the Route 53 alias target you need when creating an `A ALIAS` record.
+
+## Making the bucket publicly readable
+
+For a publicly accessible website you need to relax the public access block settings and attach a bucket policy:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-static-website-bucket"
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+
+  attach_policy = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicRead"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "_S3_BUCKET_ARN_/*"
+      }
+    ]
+  })
+
+  website = {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+}
+```
+
+<Tip>
+For production websites consider using CloudFront with an Origin Access Control (OAC) instead of a public bucket. CloudFront provides HTTPS, caching, and global distribution.
+</Tip>

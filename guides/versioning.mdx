@@ -1,0 +1,157 @@
+---
+title: Versioning & Object Lock
+description: Enable S3 versioning and WORM-compliant object locking for data protection and compliance.
+---
+
+S3 versioning keeps multiple variants of every object in your bucket. Every `PUT`, `DELETE`, and `overwrite` creates a new version rather than silently replacing the existing one. This makes accidental deletion recoverable and gives you a complete change history at no extra request cost.
+
+## Enable versioning
+
+Set the `versioning` variable with `enabled = true`:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+  acl    = "private"
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  versioning = {
+    enabled = true
+  }
+}
+```
+
+### Status field values
+
+The module accepts the `status` key as an alternative to `enabled`. Valid string values are:
+
+| Value | Behavior |
+|---|---|
+| `"Enabled"` | New objects receive a version ID; existing objects get a `null` version ID. |
+| `"Suspended"` | New objects receive a `null` version ID. Existing versions are preserved. |
+
+You can supply a boolean (`true`/`false`) via `enabled`, or the string directly via `status` — the module normalises both:
+
+```hcl
+versioning = {
+  status = "Suspended"
+}
+```
+
+## MFA delete
+
+MFA delete requires a second factor for version deletions and for toggling the versioning state. Enable it with the `mfa_delete` key and provide the MFA device serial + current token in `mfa`:
+
+```hcl
+versioning = {
+  enabled    = true
+  mfa_delete = "Enabled"
+  mfa        = "arn:aws:iam::123456789012:mfa/root-account-mfa-device 123456"
+}
+```
+
+<Warning>
+MFA delete can only be enabled or disabled by the root account. The `mfa` value must be the MFA serial number followed by the current six-digit token, separated by a space.
+</Warning>
+
+## Object Lock (WORM)
+
+Object Lock prevents objects from being deleted or overwritten for a fixed period or indefinitely. It satisfies Write Once Read Many (WORM) compliance requirements such as SEC 17a-4, CFTC, and FINRA.
+
+<Note>
+Object Lock can only be enabled on **new** buckets. Set `object_lock_enabled = true` at bucket creation time.
+</Note>
+
+### Enable object lock
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket              = "my-compliant-bucket"
+  object_lock_enabled = true
+}
+```
+
+### Configure a default retention rule
+
+Once Object Lock is enabled you can set a default retention rule with `object_lock_configuration`:
+
+<Tabs>
+  <Tab title="COMPLIANCE mode">
+    ```hcl
+    module "s3_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket              = "my-compliant-bucket"
+      object_lock_enabled = true
+
+      object_lock_configuration = {
+        rule = {
+          default_retention = {
+            mode = "COMPLIANCE"
+            days = 365
+          }
+        }
+      }
+    }
+    ```
+    In **COMPLIANCE** mode no user — including the root account — can delete or modify a locked object version before the retention period expires.
+  </Tab>
+  <Tab title="GOVERNANCE mode">
+    ```hcl
+    module "s3_bucket" {
+      source = "terraform-aws-modules/s3-bucket/aws"
+
+      bucket              = "my-s3-bucket"
+      object_lock_enabled = true
+
+      object_lock_configuration = {
+        rule = {
+          default_retention = {
+            mode = "GOVERNANCE"
+            days = 1
+          }
+        }
+      }
+    }
+    ```
+    In **GOVERNANCE** mode users with the `s3:BypassGovernanceRetention` permission can still delete or modify locked objects. Useful for testing.
+  </Tab>
+  <Tab title="Years-based retention">
+    ```hcl
+    object_lock_configuration = {
+      rule = {
+        default_retention = {
+          mode  = "COMPLIANCE"
+          years = 7
+        }
+      }
+    }
+    ```
+    Use `years` instead of `days` when retention must span calendar years.
+  </Tab>
+</Tabs>
+
+### Retention modes compared
+
+| Mode | Who can bypass | Typical use |
+|---|---|---|
+| `COMPLIANCE` | Nobody | Strict regulatory compliance |
+| `GOVERNANCE` | Users with `s3:BypassGovernanceRetention` | Development and governance workflows |
+
+## Versioning output
+
+After applying, retrieve the current versioning state with the `aws_s3_bucket_versioning_status` output:
+
+```hcl
+output "versioning_status" {
+  value = module.s3_bucket.aws_s3_bucket_versioning_status
+}
+```
+
+The value will be `"Enabled"`, `"Suspended"`, or `"Disabled"`.

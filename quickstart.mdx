@@ -1,80 +1,227 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Create your first AWS S3 bucket using the terraform-aws-s3-bucket module in minutes."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
+- [Terraform](https://developer.hashicorp.com/terraform/install) `>= 1.5.7` installed
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured with appropriate credentials
+- An AWS account with permissions to create S3 buckets and IAM policies
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Create your first bucket
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Create your Terraform configuration">
+    Create a new directory and a `main.tf` file with the following content:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```hcl main.tf
+    terraform {
+      required_version = ">= 1.5.7"
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+      required_providers {
+        aws = {
+          source  = "hashicorp/aws"
+          version = ">= 6.37"
+        }
+      }
+    }
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    provider "aws" {
+      region = "us-east-1"
+    }
 
-### Step 3: Go live
+    module "s3_bucket" {
+      source  = "terraform-aws-modules/s3-bucket/aws"
+      version = "~> 4.0"
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+      bucket = "my-s3-bucket-unique-name"
+      acl    = "private"
+
+      control_object_ownership = true
+      object_ownership         = "ObjectWriter"
+
+      versioning = {
+        enabled = true
+      }
+
+      tags = {
+        Environment = "dev"
+        Terraform   = "true"
+      }
+    }
+
+    output "bucket_id" {
+      value = module.s3_bucket.s3_bucket_id
+    }
+
+    output "bucket_arn" {
+      value = module.s3_bucket.s3_bucket_arn
+    }
+    ```
+  </Step>
+
+  <Step title="Initialize Terraform">
+    Download the module and provider:
+
+    ```bash
+    terraform init
+    ```
+
+    You should see output confirming the module was downloaded from the Terraform Registry.
+  </Step>
+
+  <Step title="Preview the plan">
+    Review what Terraform will create:
+
+    ```bash
+    terraform plan
+    ```
+
+    Terraform will show you a plan to create an S3 bucket with versioning enabled and public access blocked by default.
+  </Step>
+
+  <Step title="Apply the configuration">
+    Create the bucket:
+
+    ```bash
+    terraform apply
+    ```
+
+    Type `yes` when prompted. Terraform will create the bucket and output the bucket ID and ARN.
+  </Step>
+
+  <Step title="Verify the bucket">
+    Confirm the bucket exists using the AWS CLI:
+
+    ```bash
+    aws s3 ls s3://my-s3-bucket-unique-name
+    ```
+
+    Or check the Terraform outputs:
+
+    ```bash
+    terraform output bucket_id
+    terraform output bucket_arn
+    ```
+  </Step>
+</Steps>
+
+## Common configurations
+
+### Private bucket with versioning
+
+The simplest production-ready configuration:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket"
+  acl    = "private"
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  versioning = {
+    enabled = true
+  }
+}
+```
+
+### Bucket for ELB access logs
+
+Configure a bucket to receive Classic Load Balancer access logs:
+
+```hcl
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-logs"
+  acl    = "log-delivery-write"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_elb_log_delivery_policy = true
+}
+```
+
+### Bucket for ALB/NLB access logs
+
+Configure a bucket to receive Application or Network Load Balancer logs:
+
+```hcl
+module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-logs"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_elb_log_delivery_policy = true  # Required for ALB logs
+  attach_lb_log_delivery_policy  = true  # Required for ALB/NLB logs
+}
+```
+
+### Bucket for WAF logs
+
+Configure a bucket to receive AWS WAF logs:
+
+```hcl
+module "s3_bucket_for_waf_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-s3-bucket-for-waf-logs"
+
+  # Allow deletion of non-empty bucket
+  force_destroy = true
+
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+
+  attach_waf_log_delivery_policy = true
+}
+```
+
+## Available outputs
+
+After `terraform apply`, the following outputs are available:
+
+| Output | Description |
+|--------|-------------|
+| `s3_bucket_id` | The bucket name |
+| `s3_bucket_arn` | The bucket ARN |
+| `s3_bucket_bucket_domain_name` | `bucketname.s3.amazonaws.com` |
+| `s3_bucket_bucket_regional_domain_name` | Region-specific bucket domain name |
+| `s3_bucket_hosted_zone_id` | Route 53 Hosted Zone ID for the bucket's region |
+| `s3_bucket_region` | The AWS region of the bucket |
+| `s3_bucket_website_endpoint` | Website endpoint (if website hosting is configured) |
+| `s3_bucket_website_domain` | Website domain (for Route 53 alias records) |
+| `aws_s3_bucket_versioning_status` | Versioning status: Enabled, Suspended, or Disabled |
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="All input variables" icon="sliders" href="/reference/inputs">
+    Browse every configuration option with types and defaults.
+  </Card>
+  <Card title="Encryption guide" icon="lock" href="/guides/encryption">
+    Configure SSE-S3 or SSE-KMS server-side encryption.
+  </Card>
+  <Card title="Security policies" icon="shield" href="/security/public-access-block">
+    Enforce TLS, block public access, and control encryption.
+  </Card>
+  <Card title="Full examples" icon="code" href="/reference/examples">
+    Complete working configurations for every use case.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

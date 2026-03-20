@@ -1,0 +1,231 @@
+---
+title: Object Submodule
+description: Reference for the S3 object submodule, which manages individual objects (files) within an S3 bucket.
+---
+
+The `object` submodule manages individual S3 objects within a bucket. Use it to upload files, set metadata, configure server-side encryption per object, and manage object lock settings.
+
+## Module Reference
+
+```hcl
+module "object" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/object"
+
+  bucket = module.s3_bucket.s3_bucket_id
+  key    = "path/to/object.txt"
+
+  # ... see variables below
+}
+```
+
+---
+
+## Input Variables
+
+### Core
+
+<ParamField path="create" type="bool" default="true">
+  Whether to create this resource or not. Set to `false` to conditionally skip object creation.
+</ParamField>
+
+<ParamField path="region" type="string" default="null">
+  Region where the resource(s) will be managed. Defaults to the region set in the provider configuration.
+</ParamField>
+
+<ParamField path="bucket" type="string" default='""'>
+  The name of the bucket to put the file in. Alternatively, an S3 access point ARN can be specified.
+</ParamField>
+
+<ParamField path="key" type="string" default='""'>
+  The name of the object once it is in the bucket. This is the S3 key (path) under which the object is stored.
+</ParamField>
+
+### Content
+
+<ParamField path="file_source" type="string" default="null">
+  The path to a file that will be read and uploaded as raw bytes for the object content. Use this for uploading local files.
+</ParamField>
+
+<ParamField path="content" type="string" default="null">
+  Literal string value to use as the object content, which will be uploaded as UTF-8-encoded text.
+</ParamField>
+
+<ParamField path="content_base64" type="string" default="null">
+  Base64-encoded data that will be decoded and uploaded as raw bytes for the object content. This allows safely uploading non-UTF8 binary data, but is recommended only for small content. For larger objects, use `file_source`.
+</ParamField>
+
+### HTTP Headers
+
+<ParamField path="content_type" type="string" default="null">
+  A standard MIME type describing the format of the object data, e.g. `application/octet-stream`. All valid MIME types are valid for this input.
+</ParamField>
+
+<ParamField path="content_encoding" type="string" default="null">
+  Specifies what content encodings have been applied to the object and thus what decoding mechanisms must be applied to obtain the media-type referenced by the `Content-Type` header field.
+</ParamField>
+
+<ParamField path="content_language" type="string" default="null">
+  The language the content is in, e.g. `en-US` or `en-GB`.
+</ParamField>
+
+<ParamField path="content_disposition" type="string" default="null">
+  Specifies presentational information for the object.
+</ParamField>
+
+<ParamField path="cache_control" type="string" default="null">
+  Specifies caching behavior along the request/reply chain.
+</ParamField>
+
+<ParamField path="website_redirect" type="string" default="null">
+  Specifies a target URL for website redirect.
+</ParamField>
+
+### Storage & Encryption
+
+<ParamField path="storage_class" type="string" default="null">
+  Specifies the desired Storage Class for the object. Can be `STANDARD`, `REDUCED_REDUNDANCY`, `ONEZONE_IA`, `INTELLIGENT_TIERING`, `GLACIER`, `DEEP_ARCHIVE`, or `STANDARD_IA`. Defaults to `STANDARD`.
+</ParamField>
+
+<ParamField path="server_side_encryption" type="string" default="null">
+  Specifies server-side encryption of the object in S3. Valid values are `AES256` and `aws:kms`.
+</ParamField>
+
+<ParamField path="kms_key_id" type="string" default="null">
+  Amazon Resource Name (ARN) of the KMS Key to use for object encryption. If the S3 Bucket has server-side encryption enabled, that value will automatically be used. If referencing the `aws_kms_key` resource, use the `arn` attribute. If referencing the `aws_kms_alias` data source or resource, use the `target_key_arn` attribute.
+</ParamField>
+
+<ParamField path="bucket_key_enabled" type="bool" default="null">
+  Whether or not to use Amazon S3 Bucket Keys for SSE-KMS. Reduces the cost of SSE-KMS by lowering calls to AWS KMS.
+</ParamField>
+
+### Access Control
+
+<ParamField path="acl" type="string" default="null">
+  The canned ACL to apply. Valid values are `private`, `public-read`, `public-read-write`, `aws-exec-read`, `authenticated-read`, `bucket-owner-read`, and `bucket-owner-full-control`. Defaults to `private`.
+</ParamField>
+
+### Metadata & Tags
+
+<ParamField path="metadata" type="map(string)" default="{}">
+  A map of keys/values to provision metadata (will be automatically prefixed by `x-amz-meta-`). Note that only lowercase labels are currently supported by the AWS Go API.
+</ParamField>
+
+<ParamField path="tags" type="map(string)" default="{}">
+  A map of tags to assign to the object.
+</ParamField>
+
+<ParamField path="override_default_tags" type="bool" default="false">
+  Ignore provider `default_tags`. S3 objects support a maximum of 10 tags.
+</ParamField>
+
+### Change Detection
+
+<ParamField path="etag" type="string" default="null">
+  Used to trigger updates. This attribute is not compatible with KMS encryption, `kms_key_id`, or `server_side_encryption = "aws:kms"`.
+</ParamField>
+
+<ParamField path="source_hash" type="string" default="null">
+  Triggers updates like `etag` but useful to address etag encryption limitations. Set using `filemd5("path/to/source")` (Terraform 0.11.12 or later). The value is only stored in state and not saved by AWS.
+</ParamField>
+
+### Object Lock
+
+<ParamField path="force_destroy" type="bool" default="false">
+  Allow the object to be deleted by removing any legal hold on any object version. This value should be set to `true` only if the bucket has S3 object lock enabled.
+</ParamField>
+
+<ParamField path="object_lock_legal_hold_status" type="string" default="null">
+  The legal hold status that you want to apply to the specified object. Valid values are `ON` and `OFF`.
+</ParamField>
+
+<ParamField path="object_lock_mode" type="string" default="null">
+  The object lock retention mode that you want to apply to this object. Valid values are `GOVERNANCE` and `COMPLIANCE`.
+</ParamField>
+
+<ParamField path="object_lock_retain_until_date" type="string" default="null">
+  The date and time, in RFC3339 format, when this object's object lock will expire.
+</ParamField>
+
+---
+
+## Outputs
+
+<ResponseField name="s3_object_id" type="string">
+  The key (path) of the S3 object.
+</ResponseField>
+
+<ResponseField name="s3_object_etag" type="string">
+  The ETag generated for the object (an MD5 sum of the object content).
+</ResponseField>
+
+<ResponseField name="s3_object_version_id" type="string">
+  A unique version ID value for the object, if bucket versioning is enabled.
+</ResponseField>
+
+---
+
+## Complete Example
+
+This example demonstrates uploading objects with different content sources and encryption settings.
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-app-assets"
+
+  versioning = {
+    enabled = true
+  }
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+}
+
+# Upload a local file
+module "object_from_file" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/object"
+
+  bucket      = module.s3_bucket.s3_bucket_id
+  key         = "assets/logo.png"
+  file_source = "${path.module}/files/logo.png"
+  content_type = "image/png"
+
+  tags = {
+    Environment = "production"
+  }
+}
+
+# Upload inline text content
+module "object_from_content" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/object"
+
+  bucket       = module.s3_bucket.s3_bucket_id
+  key          = "config/settings.json"
+  content      = jsonencode({ version = "1.0", debug = false })
+  content_type = "application/json"
+
+  metadata = {
+    created-by = "terraform"
+  }
+}
+
+# Upload with KMS encryption and object lock
+module "object_locked" {
+  source = "terraform-aws-modules/s3-bucket/aws//modules/object"
+
+  bucket                        = module.s3_bucket.s3_bucket_id
+  key                           = "sensitive/data.csv"
+  file_source                   = "${path.module}/files/data.csv"
+  content_type                  = "text/csv"
+  server_side_encryption        = "aws:kms"
+  kms_key_id                    = aws_kms_key.this.arn
+  object_lock_mode              = "GOVERNANCE"
+  object_lock_retain_until_date = "2026-12-31T00:00:00Z"
+}
+```

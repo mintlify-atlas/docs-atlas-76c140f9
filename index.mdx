@@ -1,97 +1,97 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "terraform-aws-s3-bucket"
+description: "A comprehensive Terraform module for creating and managing AWS S3 buckets with full support for versioning, encryption, replication, lifecycle rules, access logging, and bucket policies."
 ---
 
-## Setting up
+## The AWS S3 Terraform Module
 
-Get your documentation site up and running in minutes.
+`terraform-aws-s3-bucket` is a production-ready Terraform module that provisions AWS S3 buckets with nearly every feature the AWS provider supports — including encryption, versioning, replication, lifecycle rules, access logging, CORS, static website hosting, object locking, and more.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create your first S3 bucket in minutes with a working Terraform configuration.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="All Inputs" icon="sliders" href="/reference/inputs">
+    Browse every input variable with descriptions, types, and defaults.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Security Guide" icon="shield" href="/security/public-access-block">
+    Enforce encryption, block public access, and apply TLS policies.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Examples" icon="code" href="/reference/examples">
+    Real-world configurations for common use cases.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Key features
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Versioning" icon="clock-rotate-left" href="/guides/versioning">
+    Enable object versioning and MFA delete for data protection.
+  </Card>
+  <Card title="Encryption" icon="lock" href="/guides/encryption">
+    Configure SSE-S3 or SSE-KMS server-side encryption.
+  </Card>
+  <Card title="Cross-Region Replication" icon="arrows-rotate" href="/guides/replication">
+    Replicate objects across AWS regions for disaster recovery.
+  </Card>
+  <Card title="Lifecycle Rules" icon="recycle" href="/guides/lifecycle">
+    Automate object transitions and expiration to reduce costs.
+  </Card>
+  <Card title="Access Logging" icon="file-lines" href="/guides/access-logging">
+    Deliver ELB, ALB/NLB, CloudTrail, and WAF logs to S3.
+  </Card>
+  <Card title="Static Website" icon="globe" href="/guides/static-website">
+    Host static websites and configure routing rules.
+  </Card>
+  <Card title="Object Lock" icon="lock-keyhole" href="/guides/versioning">
+    Enforce WORM compliance with Object Lock retention policies.
+  </Card>
+  <Card title="Directory Buckets" icon="folder" href="/guides/directory-bucket">
+    Create S3 Express One Zone directory buckets for high performance.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Requirements
 
-## Need inspiration?
+| Requirement | Version |
+|-------------|---------|
+| Terraform   | `>= 1.5.7` |
+| AWS Provider | `>= 6.37` |
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Installation
+
+Add the module to your Terraform configuration:
+
+```hcl terraform.tf
+module "s3_bucket" {
+  source  = "terraform-aws-modules/s3-bucket/aws"
+  version = "~> 4.0"
+
+  bucket = "my-s3-bucket"
+  acl    = "private"
+
+  versioning = {
+    enabled = true
+  }
+}
+```
+
+Then run:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+## Module source
+
+```
+terraform-aws-modules/s3-bucket/aws
+```
+
+Published on the [Terraform Registry](https://registry.terraform.io/modules/terraform-aws-modules/s3-bucket/aws).
+
+<Note>
+  This module requires `putin_khuylo = true` (the default). This is a statement of support for Ukrainian sovereignty and territorial integrity.
+</Note>

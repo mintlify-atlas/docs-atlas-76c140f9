@@ -1,0 +1,144 @@
+---
+title: Server-Side Encryption
+description: Protect data at rest using SSE-S3 or SSE-KMS encryption, including bucket key optimisation and KMS key enforcement.
+---
+
+Amazon S3 supports server-side encryption (SSE) transparently — AWS encrypts objects when they are written and decrypts them when they are read. The module exposes the full `server_side_encryption_configuration` variable so you can choose the algorithm and key.
+
+## SSE-S3 (AES-256)
+
+SSE-S3 uses Amazon-managed keys. No additional KMS charges apply.
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-encrypted-bucket"
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+}
+```
+
+## SSE-KMS (aws:kms)
+
+SSE-KMS uses AWS KMS customer managed keys (CMKs). Each object encryption and decryption call generates a KMS API request, which may incur cost at high throughput.
+
+```hcl
+resource "aws_kms_key" "objects" {
+  description             = "KMS key is used to encrypt bucket objects"
+  deletion_window_in_days = 7
+}
+
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-kms-encrypted-bucket"
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = aws_kms_key.objects.arn
+        sse_algorithm     = "aws:kms"
+      }
+    }
+  }
+}
+```
+
+## Bucket Key — reducing KMS costs
+
+When `bucket_key_enabled = true` S3 generates a short-lived bucket-level key from your KMS CMK. Subsequent object-level operations use this bucket key rather than calling KMS directly, reducing API calls — and costs — by up to 99 %.
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-kms-encrypted-bucket"
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = aws_kms_key.objects.arn
+        sse_algorithm     = "aws:kms"
+      }
+      bucket_key_enabled = true
+    }
+  }
+}
+```
+
+<Tip>
+Enable `bucket_key_enabled` whenever you use SSE-KMS on buckets with more than a few thousand objects.
+</Tip>
+
+## Enforcing the correct KMS key
+
+Use `attach_deny_incorrect_kms_key_sse` together with `allowed_kms_key_arn` to add a bucket policy that rejects `PutObject` requests that use a different KMS key:
+
+```hcl
+module "s3_bucket" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "my-kms-encrypted-bucket"
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = aws_kms_key.objects.arn
+        sse_algorithm     = "aws:kms"
+      }
+      bucket_key_enabled = true
+    }
+  }
+
+  # Enforce the correct KMS key on every upload
+  attach_deny_incorrect_kms_key_sse = true
+  allowed_kms_key_arn               = aws_kms_key.objects.arn
+
+  # Deny uploads without any server-side encryption header
+  attach_deny_unencrypted_object_uploads = true
+
+  # Deny uploads that specify incorrect encryption headers
+  attach_deny_incorrect_encryption_headers = true
+}
+```
+
+## Blocking SSEC (customer-provided keys)
+
+If you want to prevent callers from uploading objects with their own encryption keys (SSE-C), set:
+
+```hcl
+attach_deny_ssec_encrypted_object_uploads = true
+```
+
+## Blocked encryption types
+
+The `blocked_encryption_types` field in the rule block lets you explicitly deny certain algorithms. The complete example blocks SSE-C at the rule level:
+
+```hcl
+server_side_encryption_configuration = {
+  rule = {
+    apply_server_side_encryption_by_default = {
+      kms_master_key_id = aws_kms_key.objects.arn
+      sse_algorithm     = "aws:kms"
+    }
+    blocked_encryption_types = ["SSE-C"]
+  }
+}
+```
+
+## Comparison
+
+| Feature | SSE-S3 | SSE-KMS |
+|---|---|---|
+| Key management | AWS managed | Customer managed CMK |
+| Additional cost | None | KMS API call per object |
+| Audit trail | No | Yes (CloudTrail) |
+| Key rotation | Automatic | Configurable |
+| Bucket Key support | N/A | Yes (reduces cost) |
