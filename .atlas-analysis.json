@@ -1,0 +1,151 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "terraform-aws-s3-bucket",
+  "projectDescription": "A comprehensive Terraform module for creating and managing AWS S3 buckets with full support for versioning, encryption, replication, lifecycle rules, access logging, and bucket policies.",
+  "theme": "aspen",
+  "primaryColor": "#594ed8",
+  "lightColor": "#acacf4",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/versioning",
+              "guides/encryption",
+              "guides/replication",
+              "guides/lifecycle",
+              "guides/access-logging",
+              "guides/static-website",
+              "guides/bucket-policies",
+              "guides/directory-bucket",
+              "guides/object-management",
+              "guides/notifications"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/public-access-block",
+              "security/tls-enforcement",
+              "security/encryption-enforcement"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/terragrunt",
+              "advanced/wrappers",
+              "advanced/table-bucket",
+              "advanced/analytics",
+              "advanced/inventory"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Module Inputs",
+            "pages": [
+              "reference/inputs"
+            ]
+          },
+          {
+            "group": "Module Outputs",
+            "pages": [
+              "reference/outputs"
+            ]
+          },
+          {
+            "group": "Submodules",
+            "pages": [
+              "reference/submodule-notification",
+              "reference/submodule-object",
+              "reference/submodule-table-bucket",
+              "reference/submodule-account-public-access"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "reference/examples"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "S3 bucket creation with full configuration support",
+    "Server-side encryption (SSE-S3, SSE-KMS)",
+    "Cross-Region Replication (CRR)",
+    "Object versioning and lifecycle rules",
+    "Access logging for ELB, ALB/NLB, WAF, CloudTrail",
+    "Intelligent-Tiering configuration",
+    "Object Lock (WORM compliance)",
+    "S3 Directory Bucket support",
+    "S3 Table Bucket support",
+    "Public Access Block configuration",
+    "CORS configuration",
+    "Static website hosting",
+    "Bucket inventory and analytics",
+    "Terragrunt compatibility"
+  ],
+  "publicApiSurface": [
+    "var.create_bucket",
+    "var.bucket",
+    "var.bucket_prefix",
+    "var.acl",
+    "var.versioning",
+    "var.server_side_encryption_configuration",
+    "var.lifecycle_rule",
+    "var.replication_configuration",
+    "var.logging",
+    "var.cors_rule",
+    "var.website",
+    "var.object_lock_enabled",
+    "var.object_lock_configuration",
+    "var.intelligent_tiering",
+    "var.block_public_acls",
+    "var.block_public_policy",
+    "var.restrict_public_buckets",
+    "var.attach_elb_log_delivery_policy",
+    "var.attach_lb_log_delivery_policy",
+    "var.attach_cloudtrail_log_delivery_policy",
+    "var.attach_waf_log_delivery_policy",
+    "var.attach_deny_insecure_transport_policy",
+    "var.attach_require_latest_tls_policy",
+    "var.attach_deny_unencrypted_object_uploads",
+    "var.is_directory_bucket",
+    "var.inventory_configuration",
+    "var.analytics_configuration",
+    "var.metric_configuration",
+    "var.policy",
+    "var.tags",
+    "output.s3_bucket_id",
+    "output.s3_bucket_arn",
+    "output.s3_bucket_bucket_domain_name",
+    "output.s3_bucket_bucket_regional_domain_name",
+    "output.s3_bucket_website_endpoint",
+    "output.s3_bucket_website_domain",
+    "output.s3_bucket_region",
+    "output.s3_bucket_hosted_zone_id",
+    "output.s3_bucket_lifecycle_configuration_rules",
+    "output.s3_bucket_policy",
+    "output.aws_s3_bucket_versioning_status",
+    "output.s3_directory_bucket_name",
+    "output.s3_directory_bucket_arn"
+  ]
+}
